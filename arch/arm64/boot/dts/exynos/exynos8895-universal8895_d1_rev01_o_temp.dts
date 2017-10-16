@@ -228,9 +228,10 @@
 
 	displayport: displayport@0x11090000 {
 		dp,aux_sw_oe = <&gpi1 3 0>;
-		dp,aux_sw_sel = <&gpi1 7 0>;
+		dp,sbu_sw_sel = <&gpe7 5 0>;
+		dp,usb_con_sel = <&gpi1 7 0>;
+
 		pinctrl-names = "default";
-		pinctrl-0 = <&dp_sw_oe &dp_sw_sel>;
 	};
 
 	hsi2c@10870000 {
@@ -705,7 +706,6 @@
 					regulator-name = "VDDD_CORE_0.8V_COMP";
 					regulator-min-microvolt = <650000>;
 					regulator-max-microvolt = <8500000>;
-					regulator-always-on;
 				};
 
 				_buckboost_reg: s2mpb02-bb {
@@ -720,36 +720,30 @@
 					regulator-name = "VDDD_NORET_0.9V_COMP";
 					regulator-min-microvolt = <950000>;
 					regulator-max-microvolt = <950000>;
-					regulator-always-on;
 				};
 
 				_ldo2_reg: s2mpb02-ldo2 {
 					regulator-name = "VDDD_CORE_1.0V_COMP";
 					regulator-min-microvolt = <1000000>;
 					regulator-max-microvolt = <1000000>;
-					regulator-always-on;
 				};
 
 				_ldo3_reg: s2mpb02-ldo3 {
 					regulator-name = "VDDD_1.2V_CAM";
-					regulator-min-microvolt = <1000000>;
-					regulator-max-microvolt = <1200000>;
-					regulator-always-on;
+					regulator-min-microvolt = <1050000>;
+					regulator-max-microvolt = <1050000>;
 				};
 
 				_ldo4_reg: s2mpb02-ldo4 {
 					regulator-name = "VDDD_RET_1.0V_COMP";
 					regulator-min-microvolt = <700000>;
 					regulator-max-microvolt = <1050000>;
-					regulator-always-on;
 				};
 
 				_ldo5_reg: s2mpb02-ldo5 {
 					regulator-name = "VDDD_1.2V_VT";
-					regulator-min-microvolt = <1200000>;
-					regulator-max-microvolt = <1200000>;
-					regulator-always-on;
-					regulator-boot-on;
+					regulator-min-microvolt = <1050000>;
+					regulator-max-microvolt = <1050000>;
 				};
 
 				_ldo6_reg: s2mpb02-ldo6 {
@@ -763,49 +757,42 @@
 					regulator-name = "VDDIO_1.8V_CAM";
 					regulator-min-microvolt = <1800000>;
 					regulator-max-microvolt = <1800000>;
-					regulator-always-on;
 				};
 
 				_ldo8_reg: s2mpb02-ldo8 {
 					regulator-name = "VDDIO_1.8V_COMP";
 					regulator-min-microvolt = <1800000>;
 					regulator-max-microvolt = <1800000>;
-					regulator-always-on;
 				};
 
 				_ldo9_reg: s2mpb02-ldo9 {
 					regulator-name = "VDDA_1.8V_COMP";
 					regulator-min-microvolt = <1800000>;
 					regulator-max-microvolt = <1800000>;
-					regulator-always-on;
 				};
 
 				_ldo10_reg: s2mpb02-ldo10 {
 					regulator-name = "VDDA_1.8V_CAM";
 					regulator-min-microvolt = <1800000>;
 					regulator-max-microvolt = <1800000>;
-					regulator-always-on;
 				};
 
 				_ldo11_reg: s2mpb02-ldo11 {
 					regulator-name = "VDDA_2.9V_CAM";
-					regulator-min-microvolt = <1200000>;
+					regulator-min-microvolt = <2800000>;
 					regulator-max-microvolt = <2950000>;
-					regulator-always-on;
 				};
 
 				_ldo12_reg: s2mpb02-ldo12 {
 					regulator-name = "VDDAF_2.8V_CAM";
 					regulator-min-microvolt = <2800000>;
 					regulator-max-microvolt = <2800000>;
-					regulator-always-on;
 				};
 
 				_ldo13_reg: s2mpb02-ldo13 {
 					regulator-name = "VDDA_2.9V_VT";
-					regulator-min-microvolt = <2900000>;
-					regulator-max-microvolt = <2900000>;
-					regulator-always-on;
+					regulator-min-microvolt = <2800000>;
+					regulator-max-microvolt = <2800000>;
 				};
 
 				_ldo14_reg: s2mpb02-ldo14 {
@@ -823,11 +810,9 @@
 				};
 
 				_ldo16_reg: s2mpb02-ldo16 {
-					regulator-name = "S2MPB02_LDO16";
-					regulator-min-microvolt = <600000>;
-					regulator-max-microvolt = <3775000>;
-					regulator-always-on;
-					regulator-boot-on;
+					regulator-name = "VDD_VTCAM_AF_2.8V";
+					regulator-min-microvolt = <2800000>;
+					regulator-max-microvolt = <2800000>;
 				};
 
 				_ldo17_reg: s2mpb02-ldo17 {
@@ -898,7 +883,7 @@
 		desc-size = <4>;
 		card-detect-delay = <200>;
 		data-timeout = <200>;
-		hto-timeout = <550>;
+		hto-timeout = <80>;
 		qos-int-level = <400000>;
 		clock-frequency = <800000000>;
 		samsung,dw-mshc-sdr-timing = <3 0 2 0>;
@@ -1128,11 +1113,17 @@
 	};
 
 	abox_gic: abox_gic@0x13EF0000 {
-		status = "okay";
+		status = "disabled";
 	};
 
 	abox: abox@0x13E50000 {
-		status = "okay";
+		status = "disabled";
+		/* CAUTION:
+		 * "try to asrc off" quirk must be in dts.
+		 * It shouldn't be applied already audio tuned device,
+		 * because it changes delay and causes re-tune.
+		 */
+		quirks = "try to asrc off";
 	};
 
 	dummy_audio_codec: audio_codec_dummy {
@@ -1253,7 +1244,7 @@
 		cirrus,dspclk = <8 5 147456000>;
 		cirrus,fll1-refclk = <1 1 26000000>;
 
-		cirrus,routing = "HEADSETMIC", "MICBIAS2A",
+		samsung,routing = "HEADSETMIC", "MICBIAS2A",
 				 "IN1BL", "HEADSETMIC",
 				 "DMIC", "MICBIAS1A",
 				 "IN1AL", "DMIC",
@@ -1588,8 +1579,8 @@
 
 	fimc_is@13140000 {
 		vender {
-			rear_sensor_id = <109>; /* 2L1:29 IMX260:109 */
-			front_sensor_id = <111>; /* IMX320 : 111 */
+			rear_sensor_id = <32>; /* 2L2: 32 */
+			front_sensor_id = <31>; /* 3H1: 31 */
 			use_module_check;
 			skip_cal_loading;
 			check_sensor_vendor;
@@ -2049,19 +2040,28 @@
 		};
 	};
 
-	fimc_is_sensor_imx260: fimc-is_sensor_imx260@34 {
-		compatible = "samsung,sensor-module-imx260";
+	fimc_is_flash_gpio: fimc-is-flash-gpio@0 {
+		compatible = "samsung,sensor-flash-gpio";
+		id = <0>;
+		status = "okay";
+
+		torch-gpio = <&gpc0 2 0x1>;
+		flash-gpio = <&gpc0 1 0x1>;
+	};
+
+	fimc_is_sensor_2l2: fimc-is_sensor_2l2@5A {
+		compatible = "samsung,sensor-module-2l2";
 
 		pinctrl-names = "pin0", "pin1", "pin2";
 		pinctrl-0 = <>;
-		pinctrl-1 = <&fimc_is_flash &fimc_is_mclk0_out &fimc_is_mclk2_out>;
-		pinctrl-2 = <&fimc_is_flash &fimc_is_mclk0_fn &fimc_is_mclk2_fn>;
+		pinctrl-1 = <&fimc_is_flash_is &fimc_is_mclk0_out &fimc_is_mclk2_out>;
+		pinctrl-2 = <&fimc_is_flash_is &fimc_is_mclk0_fn &fimc_is_mclk2_fn>;
 
 		position = <0>;	/* Rear:0. Front:1 */
 		id = <0>; /* bns_id */
 		mclk_ch = <0>;
 		sensor_i2c_ch = <0>; /* I2C 0 */
-		sensor_i2c_addr = <0x34>;
+		sensor_i2c_addr = <0x5A>;
 
 		gpio_mclk = <&gpk0 0 0x1>;
 		gpio_reset = <&gpc0 4 0x1>; /* sensor reset */
@@ -2071,11 +2071,11 @@
 		af {
 			product_name = <12>; /* ak7371 */
 			i2c_addr = <0x18>;
-			i2c_ch = <1>; /* I2C 2 */
+			i2c_ch = <2>; /* I2C 2 */
 		};
 
 		flash {
-			product_name = <11>; /* FLASH_GPIO */
+			product_name = <11>; /* FLASH_GPIO*/
 			flash_first_gpio = <2>;
 			flash_second_gpio = <1>;
 		};
@@ -2095,83 +2095,8 @@
 		};
 	};
 
-	fimc_is_flash_gpio: fimc-is-flash-gpio@0 {
-		compatible = "samsung,sensor-flash-gpio";
-		id = <0>;
-		status = "okay";
-
-		torch-gpio = <&gpc0 2 0x1>;
-		flash-gpio = <&gpc0 1 0x1>;
-	};
-
-	fimc_is_sensor_2l1: fimc-is_sensor_2l1@5A {
-		compatible = "samsung,exynos5-fimc-is-sensor-2l1";
-
-		pinctrl-names = "pin0", "pin1", "pin2";
-		pinctrl-0 = <>;
-		pinctrl-1 = <&fimc_is_mclk0_out &fimc_is_mclk1_out>;
-		pinctrl-2 = <&fimc_is_mclk0_fn &fimc_is_mclk1_fn>;
-
-		position = <0>;	/* Rear:0. Front:1 */
-		id = <0>; /* bns_id */
-		mclk_ch = <0>;
-		sensor_i2c_ch = <0>; /* I2C 0 */
-		sensor_i2c_addr = <0x5A>;
-
-		gpio_mclk = <&gpk0 0 0x1>;
-		gpio_reset = <&gpc1 0 0x1>; /* sensor reset */
-		gpio_prep_reset = <&gpc1 2 0x1>; /* preprocessor reset */
-		status = "okay";
-
-		af {
-			product_name = <12>; /* ak7371 */
-			i2c_addr = <0x18>;
-			i2c_ch = <2>; /* I2C 2 */
-		};
-
-		flash {
-			product_name = <3>; /* S2MPB02 */
-			flash_first_gpio = <2>;
-			flash_second_gpio = <3>;
-		};
-
-		preprocessor {
-			product_name = <3>; /* 73C3 */
-			spi_channel = <1>;
-			i2c_addr = <0x7A>;
-			i2c_ch = <0>; /* I2C 0*/
-			dma_ch = <2>; /* DMA VC2*/
-		};
-
-		ois {
-			product_name = <1>; /* IDG2030 */
-			i2c_addr = <0x48>;
-			i2c_ch = <2>; /* I2C 2 */
-		};
-	};
-
-	fimc_is_sensor_imx320: fimc-is_sensor_imx320@20 {
-		compatible = "samsung,sensor-module-imx320";
-
-		pinctrl-names = "pin0", "pin1", "pin2";
-		pinctrl-0 = <>;
-		pinctrl-1 = <&fimc_is_mclk1_out>;
-		pinctrl-2 = <&fimc_is_mclk1_fn>;
-
-		position = <1>;	/* Rear:0. Front:1 */
-		id = <1>; /* bns_id */
-		mclk_ch = <1>;
-		sensor_i2c_ch = <1>; /* I2C 1 */
-		sensor_i2c_addr = <0x20>;
-
-		gpio_mclk = <&gpk0 1 0x1>;
-		gpio_reset = <&gpc0 3 0x1>; /* sensor reset */
-		gpio_standby = <&gpc1 0 0x1>;
-		status = "okay";
-	};
-
-	fimc_is_sensor_4e6: fimc-is_sensor_4e6@6A {
-		compatible = "samsung,sensor-module-4e6";
+	fimc_is_sensor_3h1: fimc-is_sensor_3h1@6A {
+		compatible = "samsung,sensor-module-3h1";
 
 		pinctrl-names = "pin0", "pin1", "pin2";
 		pinctrl-0 = <>;
@@ -2186,8 +2111,13 @@
 
 		gpio_mclk = <&gpk0 1 0x1>;
 		gpio_reset = <&gpc0 3 0x1>; /* sensor reset */
-		gpio_standby = <&gpc1 0 0x1>;
 		status = "okay";
+
+		af {
+			product_name = <16>; /* ak7372 */
+			i2c_addr = <0x18>;
+			i2c_ch = <3>; /* I2C 3 */
+		};
 	};
 
 	#define SENSOR_SCENARIO_NORMAL		0
@@ -2241,15 +2171,8 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&hsi2c1_bus>;
 
-		fimc-is-imx260@1A {
-			 compatible = "samsung,exynos5-fimc-is-cis-imx260";
-			 reg = <0x1A>; /* 1 bit right shift */
-			 id = <0>; /* matching sensor id */
-			 setfile = "setA";
-		};
-
-		fimc-is-2l1@2D {
-			compatible = "samsung,exynos5-fimc-is-cis-2l1";
+		fimc-is-2l2@2D {
+			compatible = "samsung,exynos5-fimc-is-cis-2l2";
 			reg = <0x2D>;
 			id = <0>;
 			setfile = "setB";
@@ -2285,11 +2208,27 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&hsi2c27_bus>;
 
-		fimc-is-imx320@10 {
-			compatible = "samsung,exynos5-fimc-is-cis-imx320";
-			reg = <0x10>; /* 1 bit right shift */
+		fimc-is-3h1@35 {
+			compatible = "samsung,exynos5-fimc-is-cis-3h1";
+			reg = <0x35>; /* 1 bit right shift */
 			id = <1>; /* matching sensor id */
 			setfile = "default";
+		};
+	};
+
+	hsi2c_28: hsi2c@10930000 {
+		gpios = <&gpe4 2 0 &gpe4 3 0>;
+		status = "okay";
+		clock-frequency = <400000>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&hsi2c28_bus>;
+
+		fimc-is-actuator@0C {
+			compatible = "samsung,exynos5-fimc-is-actuator-ak7372";
+			reg = <0x0C>;
+			id = <1>; /* matching sensor id */
+			place = <1>; /* 0: Back  1: Front */
 		};
 	};
 

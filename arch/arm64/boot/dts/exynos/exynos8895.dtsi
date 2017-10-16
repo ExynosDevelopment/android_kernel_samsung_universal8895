@@ -223,7 +223,7 @@
 			enable-method = "psci";
 			cpu-idle-states = <&NONBOOTCL_CPU_SLEEP>;
 			#cooling-cells = <2>; /* min followed by max */
-			current = <445650 355850 295970 251060 233620 201350 177320 137850 111850 100000 88090 78470 69380 58880>;
+			current = <355850 295970 251060 233620 201350 177320 137850 111850 100000 88090 78470 69380 58880>;
 		};
 		cpu@1 {
 			device_type = "cpu";
@@ -232,7 +232,7 @@
 			logical-id = <5>;
 			enable-method = "psci";
 			cpu-idle-states = <&NONBOOTCL_CPU_SLEEP>;
-			current = <445650 355850 295970 251060 233620 201350 177320 137850 111850 100000 88090 78470 69380 58880>;
+			current = <355850 295970 251060 233620 201350 177320 137850 111850 100000 88090 78470 69380 58880>;
 		};
 		cpu@2 {
 			device_type = "cpu";
@@ -241,7 +241,7 @@
 			logical-id = <6>;
 			enable-method = "psci";
 			cpu-idle-states = <&NONBOOTCL_CPU_SLEEP>;
-			current = <445650 355850 295970 251060 233620 201350 177320 137850 111850 100000 88090 78470 69380 58880>;
+			current = <355850 295970 251060 233620 201350 177320 137850 111850 100000 88090 78470 69380 58880>;
 		};
 		cpu@3 {
 			device_type = "cpu";
@@ -250,7 +250,7 @@
 			logical-id = <7>;
 			enable-method = "psci";
 			cpu-idle-states = <&NONBOOTCL_CPU_SLEEP>;
-			current = <445650 355850 295970 251060 233620 201350 177320 137850 111850 100000 88090 78470 69380 58880>;
+			current = <355850 295970 251060 233620 201350 177320 137850 111850 100000 88090 78470 69380 58880>;
 		};
 
 		idle-states {
@@ -515,7 +515,6 @@
 			cal-id = <ACPM_DVFS_CPUCL0>;
 			dm-type = <DM_CPU_CL1>;
 
-			max-freq = <2496000>;
 			min-freq = <741000>;
 
 			/* PM QoS Class ID*/
@@ -4928,6 +4927,23 @@
 			input_booster,phase_times = <0 0>;
 		};
 		booster_key@9 {
+			input_booster,label = "PEN";
+			input_booster,type = <8>;	/* BOOSTER_DEVICE_MOUSE */
+
+			input_booster,levels = <1 2>;
+
+			/* Frequency table */
+			/* for level	:	1_Head 2_Tail*/
+			input_booster,cpu_freqs = <1469000 858000>;
+			input_booster,hmp_boost = <1 1>;
+			input_booster,kfc_freqs = <832000 832000>;
+			input_booster,bimc_freqs = <0 0>;
+
+			/* Time table */
+			input_booster,head_times = <200 0>;
+			input_booster,tail_times = <0 600>;
+		};
+		booster_key@10 {
 			input_booster,label = "KEY_TWO";
 			input_booster,type = <9>;	/* BOOSTER_DEVICE_KEY */
 
