@@ -43,6 +43,9 @@
 #endif
 #include <net/ip_fib.h>
 
+#ifdef CONFIG_MPTCP
+	#include <net/mptcp.h>
+#endif
 #include <linux/errqueue.h>
 #include <asm/uaccess.h>
 
@@ -98,17 +101,15 @@ static void ip_cmsg_recv_retopts(struct msghdr *msg, struct sk_buff *skb)
 }
 
 static void ip_cmsg_recv_checksum(struct msghdr *msg, struct sk_buff *skb,
-				  int tlen, int offset)
+				  int offset)
 {
 	__wsum csum = skb->csum;
 
 	if (skb->ip_summed != CHECKSUM_COMPLETE)
 		return;
 
-	if (offset != 0) {
-		int tend_off = skb_transport_offset(skb) + tlen;
-		csum = csum_sub(csum, skb_checksum(skb, tend_off, offset, 0));
-	}
+	if (offset != 0)
+		csum = csum_sub(csum, csum_partial(skb->data, offset, 0));
 
 	put_cmsg(msg, SOL_IP, IP_CHECKSUM, sizeof(__wsum), &csum);
 }
@@ -154,7 +155,7 @@ static void ip_cmsg_recv_dstaddr(struct msghdr *msg, struct sk_buff *skb)
 }
 
 void ip_cmsg_recv_offset(struct msghdr *msg, struct sk_buff *skb,
-			 int tlen, int offset)
+			 int offset)
 {
 	struct inet_sock *inet = inet_sk(skb->sk);
 	unsigned int flags = inet->cmsg_flags;
@@ -217,7 +218,7 @@ void ip_cmsg_recv_offset(struct msghdr *msg, struct sk_buff *skb,
 	}
 
 	if (flags & IP_CMSG_CHECKSUM)
-		ip_cmsg_recv_checksum(msg, skb, tlen, offset);
+		ip_cmsg_recv_checksum(msg, skb, offset);
 }
 EXPORT_SYMBOL(ip_cmsg_recv_offset);
 
@@ -723,6 +724,19 @@ static int do_ip_setsockopt(struct sock *sk, int level,
 			inet->tos = val;
 			sk->sk_priority = rt_tos2priority(val);
 			sk_dst_reset(sk);
+#ifdef CONFIG_MPTCP
+			/* Update TOS on mptcp subflow */
+			if (is_meta_sk(sk)) {
+				struct sock *sk_it;
+				mptcp_for_each_sk(tcp_sk(sk)->mpcb, sk_it) {
+					if (inet_sk(sk_it)->tos != inet_sk(sk)->tos) {
+						inet_sk(sk_it)->tos = inet_sk(sk)->tos;
+						sk_it->sk_priority = sk->sk_priority;
+						sk_dst_reset(sk_it);
+					}
+				}
+			}
+#endif
 		}
 		break;
 	case IP_TTL:
@@ -1192,14 +1206,7 @@ void ipv4_pktinfo_prepare(const struct sock *sk, struct sk_buff *skb)
 		pktinfo->ipi_ifindex = 0;
 		pktinfo->ipi_spec_dst.s_addr = 0;
 	}
-	/* We need to keep the dst for __ip_options_echo()
-	 * We could restrict the test to opt.ts_needtime || opt.srr,
-	 * but the following is good enough as IP options are not often used.
-	 */
-	if (unlikely(IPCB(skb)->opt.optlen))
-		skb_dst_force(skb);
-	else
-		skb_dst_drop(skb);
+	skb_dst_drop(skb);
 }
 
 int ip_setsockopt(struct sock *sk, int level,

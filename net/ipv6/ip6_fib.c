@@ -179,7 +179,6 @@ static void rt6_free_pcpu(struct rt6_info *non_pcpu_rt)
 		}
 	}
 
-	free_percpu(non_pcpu_rt->rt6i_pcpu);
 	non_pcpu_rt->rt6i_pcpu = NULL;
 }
 
@@ -290,7 +289,8 @@ struct dst_entry *fib6_rule_lookup(struct net *net, struct flowi6 *fl6,
 	struct rt6_info *rt;
 
 	rt = lookup(net, net->ipv6.fib6_main_tbl, fl6, flags);
-	if (rt->dst.error == -EAGAIN) {
+	if (rt->rt6i_flags & RTF_REJECT &&
+	    rt->dst.error == -EAGAIN) {
 		ip6_rt_put(rt);
 		rt = net->ipv6.ip6_null_entry;
 		dst_hold(&rt->dst);
@@ -767,7 +767,10 @@ static int fib6_add_rt2node(struct fib6_node *fn, struct rt6_info *rt,
 				goto next_iter;
 			}
 
-			if (rt6_duplicate_nexthop(iter, rt)) {
+			if (iter->dst.dev == rt->dst.dev &&
+			    iter->rt6i_idev == rt->rt6i_idev &&
+			    ipv6_addr_equal(&iter->rt6i_gateway,
+					    &rt->rt6i_gateway)) {
 				if (rt->rt6i_nsiblings)
 					rt->rt6i_nsiblings = 0;
 				if (!(iter->rt6i_flags & RTF_EXPIRES))
@@ -899,8 +902,6 @@ add:
 			ins = &rt->dst.rt6_next;
 			iter = *ins;
 			while (iter) {
-				if (iter->rt6i_metric > rt->rt6i_metric)
-					break;
 				if (rt6_qualify_for_ecmp(iter)) {
 					*ins = iter->dst.rt6_next;
 					fib6_purge_rt(iter, fn, info->nl_net);

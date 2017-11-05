@@ -19,6 +19,74 @@
 
 static char *smc_lockup;
 
+#ifdef CONFIG_EXYNOS_KERNEL_PROTECTION
+static int __init exynos_protect_kernel_text(void)
+{
+	unsigned long ret = 0;
+	unsigned long ktext_start_va = 0;
+	unsigned long ktext_start_pa = 0;
+	unsigned long ktext_end_va = 0;
+	unsigned long ktext_end_pa = 0;
+
+	/* Get virtual addresses of kernel text */
+	ktext_start_va = kallsyms_lookup_name("_text");
+	if (!ktext_start_va) {
+		pr_err("%s: [ERROR] Kernel text start address is invalid\n",
+								__func__);
+		return -1;
+	}
+#ifdef CONFIG_TIMA_RKP
+	ktext_end_va = kallsyms_lookup_name("rkp_pgt_bitmap");
+#else
+	ktext_end_va = kallsyms_lookup_name("_etext");
+#endif
+	if (!ktext_end_va) {
+		pr_err("%s: [ERROR] Kernel text end address is invalid\n",
+								__func__);
+		return -1;
+	}
+
+	/* Translate VA to PA */
+	ktext_start_pa = virt_to_phys((void *)ktext_start_va);
+	ktext_end_pa = virt_to_phys((void *)ktext_end_va);
+
+	pr_info("%s: Kernel text start VA(%#lx), PA(%#lx)\n",
+			__func__, ktext_start_va, ktext_start_pa);
+	pr_info("%s: Kernel text end VA(%#lx), PA(%#lx)\n",
+			__func__, ktext_end_va, ktext_end_pa);
+
+	/* Request to protect kernel text area */
+	ret = exynos_smc(SMC_CMD_PROTECT_KERNEL_TEXT,
+			ktext_start_pa,
+			ktext_end_pa,
+			0);
+	if (ret) {
+		switch (ret) {
+		case EXYNOS_ERROR_NOT_VALID_ADDRESS:
+			pr_err("%s: [ERROR] Invalid address\n", __func__);
+			break;
+		case EXYNOS_ERROR_TZASC_WRONG_REGION:
+			pr_err("%s: [ERROR] Wrong TZASC region\n", __func__);
+			break;
+		case EXYNOS_ERROR_ALREADY_INITIALIZED:
+			pr_err("%s: [ERROR] Already initialized\n", __func__);
+			break;
+		default:
+			pr_err("%s: [ERROR] Unknown error [ret = %#lx]\n",
+					__func__, ret);
+			break;
+		}
+
+		return ret;
+	}
+
+	pr_info("%s: Success to set Kernel code as read-only\n", __func__);
+
+	return 0;
+}
+core_initcall(exynos_protect_kernel_text);
+#endif
+
 static int  __init exynos_set_debug_mem(void)
 {
 	int ret;

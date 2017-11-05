@@ -45,7 +45,12 @@ Child node optional properties:
   - cirrus,micd-software-compare : Use a software comparison to determine mic
     presence
 
+  - cirrus,jd-invert : Invert the polarity of the jack detection switch
+
   - cirrus,jd-use-jd2 : Use JD2 input with JD1 for dual jack detection.
+
+  - cirrus,jd-wake-time : Specifies a length of time that a wake lock will be
+    held for during jack detection operations.
 
   - cirrus,gpsw : Settings for the general purpose switches, set as per the
     SWn_MODE bits in the GP Switch 1 register.
@@ -74,7 +79,7 @@ Child node optional properties:
     where clamp_x is the clamp pin for channel x and sense_x is the impedance
     sense pin for channel x, as per the HPD_OUT_SEL field of HEADPHONE_DETECT_0
     register. A value >0xFFFF means use the default.
-    (cs47l90, cs47l91, cs47l92, cs47l93)
+    (cs47l15, cs47l90, cs47l91, cs47l92, cs47l93)
 
   - cirrus,micd-ranges : Microphone detection level and key configuration, this
     field can be of variable length but should always be a multiple of 2 cells
@@ -97,6 +102,19 @@ Child node optional properties:
     fifth cell is
       set to zero (cs47l35, cs47l85, wm1840)
       value of HPn_GND_SEL register field (all other codecs)
+
+  - cirrus,moisture-pin : The pin on which the moisture detection should be
+    run. For (cs47l35, cs47l85, wm1840) this should be set to
+    MADERA_ACCDET_MODE_HPx, for (cs47l90, cs47l91) this should be set to
+    MADERA_HPD_SENSE_x.
+  - cirrus,moisture-imp : The impedance threshold above which a detection will
+    be considered moisture rather than a valid jack detection.
+  - cirrus,moisture-debounce :  The number of debounce measurements to perform
+    on the moisture detection.
+
+  - cirrus,init-delay-ms : Add a delay after jack detection in mS
+  - cirrus,hs-mic: Specify an input to mute during headset button presses:
+    1 - IN1L, 2 - IN1R, ..., n - IN[n]R
 
 Example:
 

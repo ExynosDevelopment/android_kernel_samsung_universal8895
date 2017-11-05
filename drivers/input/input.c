@@ -534,7 +534,7 @@ void input_booster(struct input_dev *dev)
 		} else if (input_events[i].type == EV_KEY) {
 			switch (input_events[i].code) {
 				case BTN_TOUCH :
-					if(input_events[i+1].type == EV_KEY && input_events[i+1].code == BTN_TOOL_PEN) {
+					if(input_events[i+1].type == EV_ABS && input_events[i+1].code == ABS_PRESSURE) {
 						if(input_events[i].value && !pen_booster.multi_events) {
 							pr_debug("[Input Booster] PEN EVENT - PRESS\n");
 							RUN_BOOSTER(pen, BOOSTER_ON);

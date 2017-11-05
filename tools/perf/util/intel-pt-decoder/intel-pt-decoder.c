@@ -22,7 +22,6 @@
 #include <errno.h>
 #include <stdint.h>
 #include <inttypes.h>
-#include <linux/compiler.h>
 
 #include "../cache.h"
 #include "../util.h"
@@ -64,25 +63,6 @@ enum intel_pt_pkt_state {
 	INTEL_PT_STATE_FUP_NO_TIP,
 };
 
-static inline bool intel_pt_sample_time(enum intel_pt_pkt_state pkt_state)
-{
-	switch (pkt_state) {
-	case INTEL_PT_STATE_NO_PSB:
-	case INTEL_PT_STATE_NO_IP:
-	case INTEL_PT_STATE_ERR_RESYNC:
-	case INTEL_PT_STATE_IN_SYNC:
-	case INTEL_PT_STATE_TNT:
-		return true;
-	case INTEL_PT_STATE_TIP:
-	case INTEL_PT_STATE_TIP_PGD:
-	case INTEL_PT_STATE_FUP:
-	case INTEL_PT_STATE_FUP_NO_TIP:
-		return false;
-	default:
-		return true;
-	};
-}
-
 #ifdef INTEL_PT_STRICT
 #define INTEL_PT_STATE_ERR1	INTEL_PT_STATE_NO_PSB
 #define INTEL_PT_STATE_ERR2	INTEL_PT_STATE_NO_PSB
@@ -109,7 +89,6 @@ struct intel_pt_decoder {
 	bool pge;
 	bool have_tma;
 	bool have_cyc;
-	bool fixup_last_mtc;
 	uint64_t pos;
 	uint64_t last_ip;
 	uint64_t ip;
@@ -117,7 +96,6 @@ struct intel_pt_decoder {
 	uint64_t timestamp;
 	uint64_t tsc_timestamp;
 	uint64_t ref_timestamp;
-	uint64_t sample_timestamp;
 	uint64_t ret_addr;
 	uint64_t ctc_timestamp;
 	uint64_t ctc_delta;
@@ -160,7 +138,6 @@ struct intel_pt_decoder {
 	unsigned int fup_tx_flags;
 	unsigned int tx_flags;
 	uint64_t timestamp_insn_cnt;
-	uint64_t sample_insn_cnt;
 	uint64_t stuck_ip;
 	int no_progress;
 	int stuck_ip_prd;
@@ -607,30 +584,9 @@ struct intel_pt_calc_cyc_to_tsc_info {
 	uint64_t        tsc_timestamp;
 	uint64_t        timestamp;
 	bool            have_tma;
-	bool            fixup_last_mtc;
 	bool            from_mtc;
 	double          cbr_cyc_to_tsc;
 };
-
-/*
- * MTC provides a 8-bit slice of CTC but the TMA packet only provides the lower
- * 16 bits of CTC. If mtc_shift > 8 then some of the MTC bits are not in the CTC
- * provided by the TMA packet. Fix-up the last_mtc calculated from the TMA
- * packet by copying the missing bits from the current MTC assuming the least
- * difference between the two, and that the current MTC comes after last_mtc.
- */
-static void intel_pt_fixup_last_mtc(uint32_t mtc, int mtc_shift,
-				    uint32_t *last_mtc)
-{
-	uint32_t first_missing_bit = 1U << (16 - mtc_shift);
-	uint32_t mask = ~(first_missing_bit - 1);
-
-	*last_mtc |= mtc & mask;
-	if (*last_mtc >= mtc) {
-		*last_mtc -= first_missing_bit;
-		*last_mtc &= 0xff;
-	}
-}
 
 static int intel_pt_calc_cyc_cb(struct intel_pt_pkt_info *pkt_info)
 {
@@ -661,11 +617,6 @@ static int intel_pt_calc_cyc_cb(struct intel_pt_pkt_info *pkt_info)
 			return 0;
 
 		mtc = pkt_info->packet.payload;
-		if (decoder->mtc_shift > 8 && data->fixup_last_mtc) {
-			data->fixup_last_mtc = false;
-			intel_pt_fixup_last_mtc(mtc, decoder->mtc_shift,
-						&data->last_mtc);
-		}
 		if (mtc > data->last_mtc)
 			mtc_delta = mtc - data->last_mtc;
 		else
@@ -734,7 +685,6 @@ static int intel_pt_calc_cyc_cb(struct intel_pt_pkt_info *pkt_info)
 
 		data->ctc_delta = 0;
 		data->have_tma = true;
-		data->fixup_last_mtc = true;
 
 		return 0;
 
@@ -801,7 +751,6 @@ static void intel_pt_calc_cyc_to_tsc(struct intel_pt_decoder *decoder,
 		.tsc_timestamp  = decoder->tsc_timestamp,
 		.timestamp      = decoder->timestamp,
 		.have_tma       = decoder->have_tma,
-		.fixup_last_mtc = decoder->fixup_last_mtc,
 		.from_mtc       = from_mtc,
 		.cbr_cyc_to_tsc = 0,
 	};
@@ -917,7 +866,6 @@ static int intel_pt_walk_insn(struct intel_pt_decoder *decoder,
 
 	decoder->tot_insn_cnt += insn_cnt;
 	decoder->timestamp_insn_cnt += insn_cnt;
-	decoder->sample_insn_cnt += insn_cnt;
 	decoder->period_insn_cnt += insn_cnt;
 
 	if (err) {
@@ -1293,7 +1241,6 @@ static void intel_pt_calc_tma(struct intel_pt_decoder *decoder)
 	}
 	decoder->ctc_delta = 0;
 	decoder->have_tma = true;
-	decoder->fixup_last_mtc = true;
 	intel_pt_log("CTC timestamp " x64_fmt " last MTC %#x  CTC rem %#x\n",
 		     decoder->ctc_timestamp, decoder->last_mtc, ctc_rem);
 }
@@ -1307,12 +1254,6 @@ static void intel_pt_calc_mtc_timestamp(struct intel_pt_decoder *decoder)
 		return;
 
 	mtc = decoder->packet.payload;
-
-	if (decoder->mtc_shift > 8 && decoder->fixup_last_mtc) {
-		decoder->fixup_last_mtc = false;
-		intel_pt_fixup_last_mtc(mtc, decoder->mtc_shift,
-					&decoder->last_mtc);
-	}
 
 	if (mtc > decoder->last_mtc)
 		mtc_delta = mtc - decoder->last_mtc;
@@ -1382,8 +1323,6 @@ static void intel_pt_calc_cyc_timestamp(struct intel_pt_decoder *decoder)
 			     timestamp, decoder->timestamp);
 	else
 		decoder->timestamp = timestamp;
-
-	decoder->timestamp_insn_cnt = 0;
 }
 
 /* Walk PSB+ packets when already in sync. */
@@ -1731,7 +1670,6 @@ static int intel_pt_walk_psb(struct intel_pt_decoder *decoder)
 		switch (decoder->packet.type) {
 		case INTEL_PT_TIP_PGD:
 			decoder->continuous_period = false;
-			__fallthrough;
 		case INTEL_PT_TIP_PGE:
 		case INTEL_PT_TIP:
 			intel_pt_log("ERROR: Unexpected packet\n");
@@ -1786,8 +1724,6 @@ static int intel_pt_walk_psb(struct intel_pt_decoder *decoder)
 			decoder->pge = false;
 			decoder->continuous_period = false;
 			intel_pt_clear_tx_flags(decoder);
-			__fallthrough;
-
 		case INTEL_PT_TNT:
 			decoder->have_tma = false;
 			intel_pt_log("ERROR: Unexpected packet\n");
@@ -1828,7 +1764,6 @@ static int intel_pt_walk_to_ip(struct intel_pt_decoder *decoder)
 		switch (decoder->packet.type) {
 		case INTEL_PT_TIP_PGD:
 			decoder->continuous_period = false;
-			__fallthrough;
 		case INTEL_PT_TIP_PGE:
 		case INTEL_PT_TIP:
 			decoder->pge = decoder->packet.type != INTEL_PT_TIP_PGD;
@@ -1898,7 +1833,6 @@ static int intel_pt_walk_to_ip(struct intel_pt_decoder *decoder)
 			break;
 
 		case INTEL_PT_PSB:
-			intel_pt_clear_stack(&decoder->stack);
 			err = intel_pt_walk_psb(decoder);
 			if (err)
 				return err;
@@ -1923,8 +1857,6 @@ static int intel_pt_walk_to_ip(struct intel_pt_decoder *decoder)
 static int intel_pt_sync_ip(struct intel_pt_decoder *decoder)
 {
 	int err;
-
-	decoder->set_fup_tx_flags = false;
 
 	intel_pt_log("Scanning for full IP\n");
 	err = intel_pt_walk_to_ip(decoder);
@@ -2060,7 +1992,7 @@ static int intel_pt_sync(struct intel_pt_decoder *decoder)
 
 static uint64_t intel_pt_est_timestamp(struct intel_pt_decoder *decoder)
 {
-	uint64_t est = decoder->sample_insn_cnt << 1;
+	uint64_t est = decoder->timestamp_insn_cnt << 1;
 
 	if (!decoder->cbr || !decoder->max_non_turbo_ratio)
 		goto out;
@@ -2068,7 +2000,7 @@ static uint64_t intel_pt_est_timestamp(struct intel_pt_decoder *decoder)
 	est *= decoder->max_non_turbo_ratio;
 	est /= decoder->cbr;
 out:
-	return decoder->sample_timestamp + est;
+	return decoder->timestamp + est;
 }
 
 const struct intel_pt_state *intel_pt_decode(struct intel_pt_decoder *decoder)
@@ -2085,7 +2017,6 @@ const struct intel_pt_state *intel_pt_decode(struct intel_pt_decoder *decoder)
 			break;
 		case INTEL_PT_STATE_NO_IP:
 			decoder->last_ip = 0;
-			decoder->ip = 0;
 			/* Fall through */
 		case INTEL_PT_STATE_ERR_RESYNC:
 			err = intel_pt_sync_ip(decoder);
@@ -2122,23 +2053,14 @@ const struct intel_pt_state *intel_pt_decode(struct intel_pt_decoder *decoder)
 		}
 	} while (err == -ENOLINK);
 
-	if (err) {
-		decoder->state.err = intel_pt_ext_err(err);
-		decoder->state.from_ip = decoder->ip;
-		decoder->sample_timestamp = decoder->timestamp;
-		decoder->sample_insn_cnt = decoder->timestamp_insn_cnt;
-	} else {
-		decoder->state.err = 0;
-		if (intel_pt_sample_time(decoder->pkt_state)) {
-			decoder->sample_timestamp = decoder->timestamp;
-			decoder->sample_insn_cnt = decoder->timestamp_insn_cnt;
-		}
-	}
-
-	decoder->state.timestamp = decoder->sample_timestamp;
+	decoder->state.err = err ? intel_pt_ext_err(err) : 0;
+	decoder->state.timestamp = decoder->timestamp;
 	decoder->state.est_timestamp = intel_pt_est_timestamp(decoder);
 	decoder->state.cr3 = decoder->cr3;
 	decoder->state.tot_insn_cnt = decoder->tot_insn_cnt;
+
+	if (err)
+		decoder->state.from_ip = decoder->ip;
 
 	return &decoder->state;
 }

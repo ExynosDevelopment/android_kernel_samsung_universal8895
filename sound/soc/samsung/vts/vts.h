@@ -154,6 +154,11 @@
 /* VTS firmware version information offset */
 #define VTSFW_VERSION_OFFSET	(0x7c)
 #define DETLIB_VERSION_OFFSET	(0x78)
+
+/* VTS Model Binary Max buffer sizes */
+#define VTS_MODEL_SVOICE_BIN_MAXSZ	(SZ_64K)
+#define VTS_MODEL_GOOGLE_BIN_MAXSZ	(SZ_64K)
+
 enum ipc_state {
 	IDLE,
 	SEND_MSG,
@@ -163,9 +168,9 @@ enum ipc_state {
 
 enum trigger {
 	TRIGGER_NONE	= -1,
-	TRIGGER_MCD	= 0,
-	TRIGGER_SENSORY	= 1,
-	TRIGGER_GOOGLE	= 2,
+	TRIGGER_SVOICE	= 0,
+	TRIGGER_GOOGLE	= 1,
+	TRIGGER_SENSORY	= 2,
 	TRIGGER_COUNT,
 };
 
@@ -175,10 +180,28 @@ enum vts_platform_type {
 };
 
 enum executionmode {
-	VTS_OFF_MODE		= 0,	//default is off
-	VTS_VOICE_TRIGGER_MODE	= 1,	//voice-trig-mode:Both LPSD & Trigger are enabled
-	VTS_SOUND_DETECT_MODE	= 2,	//sound-detect-mode: Low Power sound Detect
-	VTS_VT_ALWAYS_ON_MODE	= 3,	//vt-always-mode: key phrase Detection only(Trigger)
+	//default is off
+	VTS_OFF_MODE			= 0,
+	//voice-trig-mode:Both LPSD & Trigger are enabled
+	VTS_VOICE_TRIGGER_MODE		= 1,
+	//sound-detect-mode: Low Power sound Detect
+	VTS_SOUND_DETECT_MODE		= 2,
+	//vt-always-mode: key phrase Detection only(Trigger)
+	VTS_VT_ALWAYS_ON_MODE		= 3,
+	//google-trigger: key phrase Detection only(Trigger)
+	VTS_GOOGLE_TRIGGER_MODE		= 4,
+	//sensory-trigger: key phrase Detection only(Trigger)
+	VTS_SENSORY_TRIGGER_MODE	= 5,
+	//off:voice-trig-mode:Both LPSD & Trigger are enabled
+	VTS_VOICE_TRIGGER_MODE_OFF	= 6,
+	//off:sound-detect-mode: Low Power sound Detect
+	VTS_SOUND_DETECT_MODE_OFF	= 7,
+	//off:vt-always-mode: key phrase Detection only(Trigger)
+	VTS_VT_ALWAYS_ON_MODE_OFF	= 8,
+	//off:google-trigger: key phrase Detection only(Trigger)
+	VTS_GOOGLE_TRIGGER_MODE_OFF	= 9,
+	//off:sensory-trigger: key phrase Detection only(Trigger)
+	VTS_SENSORY_TRIGGER_MODE_OFF	= 10,
 	VTS_MODE_COUNT,
 };
 
@@ -201,6 +224,7 @@ struct vts_ipc_msg {
 enum vts_micconf_type {
 	VTS_MICCONF_FOR_RECORD	= 0,
 	VTS_MICCONF_FOR_TRIGGER	= 1,
+	VTS_MICCONF_FOR_GOOGLE	= 2,
 };
 
 enum vts_state_machine {
@@ -212,6 +236,13 @@ enum vts_state_machine {
 	VTS_STATE_SEAMLESS_REC_STARTED	= 5,	//seamless record started
 	VTS_STATE_SEAMLESS_REC_STOPPED	= 6,	//seamless record started
 	VTS_STATE_RECOG_STOPPED		= 7,	//Voice Recognization stopped
+};
+
+struct vts_model_bin_info {
+	unsigned char *data;
+	size_t	actual_sz;
+	size_t	max_sz;
+	bool loaded;
 };
 
 struct vts_data {
@@ -264,6 +295,8 @@ struct vts_data {
 	u32 running_ipc;
 	struct wake_lock wake_lock;
 	unsigned int vts_state;
+	struct vts_model_bin_info svoice_info;
+	struct vts_model_bin_info google_info;
 };
 
 struct vts_platform_data {

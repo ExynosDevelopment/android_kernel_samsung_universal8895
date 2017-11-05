@@ -97,11 +97,11 @@ static void inet_get_ping_group_range_table(struct ctl_table *table, kgid_t *low
 		container_of(table->data, struct net, ipv4.ping_group_range.range);
 	unsigned int seq;
 	do {
-		seq = read_seqbegin(&net->ipv4.ping_group_range.lock);
+		seq = read_seqbegin(&net->ipv4.ip_local_ports.lock);
 
 		*low = data[0];
 		*high = data[1];
-	} while (read_seqretry(&net->ipv4.ping_group_range.lock, seq));
+	} while (read_seqretry(&net->ipv4.ip_local_ports.lock, seq));
 }
 
 /* Update system visible IP port range */
@@ -110,10 +110,10 @@ static void set_ping_group_range(struct ctl_table *table, kgid_t low, kgid_t hig
 	kgid_t *data = table->data;
 	struct net *net =
 		container_of(table->data, struct net, ipv4.ping_group_range.range);
-	write_seqlock(&net->ipv4.ping_group_range.lock);
+	write_seqlock(&net->ipv4.ip_local_ports.lock);
 	data[0] = low;
 	data[1] = high;
-	write_sequnlock(&net->ipv4.ping_group_range.lock);
+	write_sequnlock(&net->ipv4.ip_local_ports.lock);
 }
 
 /* Validate changes from /proc interface. */
@@ -310,13 +310,13 @@ static int proc_cltcp_ifdevs(struct ctl_table *ctl, int write,
 		rcu_read_lock();
 		dev = dev_get_by_name_rcu(&init_net, ifname);
 		if (dev) {
-			if (dev->ifindex >= 0 &&
+			if (dev->ifindex >= 0 && 
 					dev->ifindex < TCP_CLTCP_IFDEVS_MAX) {
 				sysctl_tcp_cltcp_ifdevs |= (1 << dev->ifindex);
-				pr_info("%s: cltcp: ifdev %s added\n",
+				pr_info("%s: cltcp: ifdev %s added\n", 
 						__func__, ifname);
 			} else {
-				pr_info("%s: cltcp: err! ifindex=%d\n",
+				pr_info("%s: cltcp: err! ifindex=%d\n", 
 						__func__, dev->ifindex);
 			}
 		}
@@ -731,16 +731,16 @@ static struct ctl_table ipv4_table[] = {
 		.proc_handler	= proc_dointvec
 	},
 #ifdef CONFIG_CLTCP
-	{
+	{	
 		.procname	= "tcp_cltcp",
-		.data		= &sysctl_tcp_cltcp,
+		.data		= &sysctl_tcp_cltcp,	
 		.maxlen 	= sizeof(sysctl_tcp_cltcp),
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec
 	},
-	{
+	{	
 		.procname	= "tcp_cltcp_ifdevs",
-		.data		= &sysctl_tcp_cltcp_ifdevs,
+		.data		= &sysctl_tcp_cltcp_ifdevs,	
 		.maxlen 	= sizeof(sysctl_tcp_cltcp_ifdevs),
 		.mode		= 0644,
 		.proc_handler	= proc_cltcp_ifdevs

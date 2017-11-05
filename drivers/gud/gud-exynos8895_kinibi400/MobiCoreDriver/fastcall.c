@@ -126,7 +126,7 @@ struct smc_log_entry {
 	struct mc_fc_as_in as_in;
 };
 
-#define SMC_LOG_SIZE 256
+#define SMC_LOG_SIZE 1024
 static struct smc_log_entry smc_log[SMC_LOG_SIZE];
 static int smc_log_index;
 

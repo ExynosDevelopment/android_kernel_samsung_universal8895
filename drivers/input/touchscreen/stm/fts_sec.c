@@ -3939,10 +3939,12 @@ static void get_tsp_test_result(void *device_data)
 	} else {
 		snprintf(buff, sizeof(buff), "M:%s, M:%d, A:%s, A:%d",
 				info->test_result.module_result == 0 ? "NONE" :
-				info->test_result.module_result == 1 ? "FAIL" : "PASS",
+				info->test_result.module_result == 1 ? "FAIL" :
+				info->test_result.module_result == 2 ? "PASS" : "A",
 				info->test_result.module_count,
 				info->test_result.assy_result == 0 ? "NONE" :
-				info->test_result.assy_result == 1 ? "FAIL" : "PASS",
+				info->test_result.assy_result == 1 ? "FAIL" :
+				info->test_result.assy_result == 2 ? "PASS" : "A",
 				info->test_result.assy_count);
 
 		sec_cmd_set_cmd_result(sec, buff, strlen(buff));
@@ -3964,10 +3966,12 @@ static int fts_set_tsp_test_result(struct fts_ts_info *info)
 	input_info(true, &info->client->dev, "%s: [0x%X] M:%s, M:%d, A:%s, A:%d\n",
 		__func__, info->test_result.data[0],
 		info->test_result.module_result == 0 ? "NONE" :
-		info->test_result.module_result == 1 ? "FAIL" : "PASS",
+		info->test_result.module_result == 1 ? "FAIL" :
+		info->test_result.module_result == 2 ? "PASS" : "A",
 		info->test_result.module_count,
 		info->test_result.assy_result == 0 ? "NONE" :
-		info->test_result.assy_result == 1 ? "FAIL" : "PASS",
+		info->test_result.assy_result == 1 ? "FAIL" :
+		info->test_result.assy_result == 2 ? "PASS" : "A",
 		info->test_result.assy_count);
 
 	data = kzalloc(nvm_data[FACTORY_TEST_RESULT].length, GFP_KERNEL);

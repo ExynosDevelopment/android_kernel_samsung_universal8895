@@ -55,6 +55,29 @@ static int get_max_brightness(struct brightness_table *brt_tbl, int brightness)
 	return brt_tbl->brt[brt_tbl->sz_brt - 1];
 }
 
+bool is_hbm_brightness(struct panel_bl_device *panel_bl, int brightness)
+{
+	struct panel_bl_sub_dev *subdev;
+	int luminance;
+	int sz_ui_lum;
+
+	if (unlikely(!panel_bl)) {
+		pr_err("%s, invalid parameter\n", __func__);
+		return false;
+	}
+
+	subdev = &panel_bl->subdev[panel_bl->props.id];
+	luminance = get_actual_brightness(panel_bl, brightness);
+
+	sz_ui_lum = subdev->brt_tbl.sz_ui_lum;
+	if (sz_ui_lum <= 0 || sz_ui_lum > subdev->brt_tbl.sz_lum) {
+		pr_err("%s out of range (sz_ui_lum %d)\n", __func__, sz_ui_lum);
+		return false;
+	}
+
+	return (luminance > subdev->brt_tbl.lum[sz_ui_lum - 1]);
+}
+
 static bool is_valid_brightness(struct panel_bl_device *panel_bl, int brightness)
 {
 	int id, max_brightness;
@@ -369,22 +392,16 @@ static void panel_bl_update_acl_state(struct panel_bl_device *panel_bl)
 		panel_bl->props.acl_opr = ACL_OPR_OFF;
 		panel_bl->props.acl_pwrsave = ACL_PWRSAVE_OFF;
 		return;
-	} 
-#endif
-
-	if (IS_HBM_BRIGHTNESS(panel_bl->props.brightness) ||
-		IS_EXT_HBM_BRIGHTNESS(panel_bl->props.brightness)) {
-		panel_bl->props.acl_opr = ACL_OPR_08P;
-		panel_bl->props.acl_pwrsave = ACL_PWRSAVE_ON;
-	} else if (panel_data->props.adaptive_control > ACL_OPR_15P) {
-		panel_bl->props.acl_opr = ACL_OPR_15P;
-		panel_bl->props.acl_pwrsave = ACL_PWRSAVE_ON;
-	} else {
-		panel_bl->props.acl_opr = panel_data->props.adaptive_control;
-		panel_bl->props.acl_pwrsave =
-			((panel_data->props.adaptive_control == ACL_OPR_OFF) ?
-			 ACL_PWRSAVE_OFF : ACL_PWRSAVE_ON);
 	}
+#endif
+	if (is_hbm_brightness(panel_bl, panel_bl->props.brightness))
+		panel_bl->props.acl_opr = ACL_OPR_08P;
+	else
+		panel_bl->props.acl_opr = ACL_OPR_15P;
+
+	panel_bl->props.acl_pwrsave =
+		(panel_data->props.adaptive_control == ACL_OPR_OFF) ?
+		ACL_PWRSAVE_OFF : ACL_PWRSAVE_ON;
 }
 
 int panel_bl_get_acl_pwrsave(struct panel_bl_device *panel_bl)
@@ -485,6 +502,7 @@ static int panel_set_brightness(struct backlight_device *bd)
 	int ret = 0;
 	int brightness = bd->props.brightness;
 	struct panel_bl_device *panel_bl = bl_get_data(bd);
+	struct panel_device *panel = to_panel_device(panel_bl);
 
 	mutex_lock(&panel_bl->lock);
 	if (brightness < UI_MIN_BRIGHTNESS || brightness > EXTEND_BRIGHTNESS) {
@@ -501,6 +519,14 @@ static int panel_set_brightness(struct backlight_device *bd)
 		ret = -EINVAL;
 		goto exit_set;
 	}
+
+#ifdef CONFIG_SUPPORT_DOZE
+	if (panel->state.cur_state == PANEL_STATE_ALPM) {
+		pr_info("%s bl-%d plat_br:%d - store in LPM MODE\n",
+				__func__, PANEL_BL_SUBDEV_TYPE_DISP, brightness);
+		goto exit_set;
+	}
+#endif
 
 	ret = panel_bl_set_brightness(panel_bl, PANEL_BL_SUBDEV_TYPE_DISP, 1);
 	if (ret) {

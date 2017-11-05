@@ -85,7 +85,7 @@ struct fib_table *fib_new_table(struct net *net, u32 id)
 	if (tb)
 		return tb;
 
-	if (id == RT_TABLE_LOCAL && !net->ipv4.fib_has_custom_rules)
+	if (id == RT_TABLE_LOCAL)
 		alias = fib_new_table(net, RT_TABLE_MAIN);
 
 	tb = fib_trie_table(id, alias);
@@ -758,7 +758,7 @@ static int inet_dump_fib(struct sk_buff *skb, struct netlink_callback *cb)
 	unsigned int e = 0, s_e;
 	struct fib_table *tb;
 	struct hlist_head *head;
-	int dumped = 0, err;
+	int dumped = 0;
 
 	if (nlmsg_len(cb->nlh) >= sizeof(struct rtmsg) &&
 	    ((struct rtmsg *) nlmsg_data(cb->nlh))->rtm_flags & RTM_F_CLONED)
@@ -778,27 +778,20 @@ static int inet_dump_fib(struct sk_buff *skb, struct netlink_callback *cb)
 			if (dumped)
 				memset(&cb->args[2], 0, sizeof(cb->args) -
 						 2 * sizeof(cb->args[0]));
-			err = fib_table_dump(tb, skb, cb);
-			if (err < 0) {
-				if (likely(skb->len))
-					goto out;
-
-				goto out_err;
-			}
+			if (fib_table_dump(tb, skb, cb) < 0)
+				goto out;
 			dumped = 1;
 next:
 			e++;
 		}
 	}
 out:
-	err = skb->len;
-out_err:
 	rcu_read_unlock();
 
 	cb->args[1] = e;
 	cb->args[0] = h;
 
-	return err;
+	return skb->len;
 }
 
 /* Prepare and feed intra-kernel routing request.
@@ -1088,8 +1081,7 @@ static void nl_fib_input(struct sk_buff *skb)
 
 	net = sock_net(skb->sk);
 	nlh = nlmsg_hdr(skb);
-	if (skb->len < nlmsg_total_size(sizeof(*frn)) ||
-	    skb->len < nlh->nlmsg_len ||
+	if (skb->len < NLMSG_HDRLEN || skb->len < nlh->nlmsg_len ||
 	    nlmsg_len(nlh) < sizeof(*frn))
 		return;
 

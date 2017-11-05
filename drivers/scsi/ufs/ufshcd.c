@@ -42,7 +42,6 @@
 #if defined(CONFIG_PM_DEVFREQ)
 #include <linux/devfreq.h>
 #endif
-#include <linux/blkdev.h>
 #include <linux/nls.h>
 #include <linux/smc.h>
 #include <scsi/ufs/ioctl.h>
@@ -366,8 +365,7 @@ static void SEC_ufs_uic_error_check(struct ufs_hba *hba, bool cmd_count, bool fa
 			uic_err_cnt->DME_ERROR_cnt &= 0xfe;
 			uic_err_cnt->DME_ERROR_cnt++;
 		}
-		if (uic_error)
-			uic_err_cnt->UIC_err++;
+		uic_err_cnt->UIC_err++;
 
 	} else if (fatal_error) {
 		struct SEC_UFS_Fatal_err_count *fatal_err_cnt = &(err_info->Fatal_err_count);
@@ -388,7 +386,8 @@ static void SEC_ufs_uic_error_check(struct ufs_hba *hba, bool cmd_count, bool fa
 			fatal_err_cnt->LLE &= 0xfe;
 			fatal_err_cnt->LLE++;
 		}
-		fatal_err_cnt->Fatal_err++;
+		if (hba->errors & INT_FATAL_ERRORS)
+			fatal_err_cnt->Fatal_err++;
 	}
 }
 
@@ -401,9 +400,11 @@ static void SEC_ufs_utp_error_check(struct ufs_hba *hba, struct scsi_cmnd *cmd, 
 		if (tm_cmd == UFS_QUERY_TASK) {
 			utp_err->UTMR_query_task_count &= 0xfe;
 			utp_err->UTMR_query_task_count++;
+			utp_err->UTP_err++;
 		} else if (tm_cmd == UFS_ABORT_TASK) {
 			utp_err->UTMR_abort_task_count &= 0xfe;
 			utp_err->UTMR_abort_task_count++;
+			utp_err->UTP_err++;
 		}
 	} else {
 		// cmd logging
@@ -412,21 +413,25 @@ static void SEC_ufs_utp_error_check(struct ufs_hba *hba, struct scsi_cmnd *cmd, 
 		if (opcode == WRITE_10) {
 			utp_err->UTR_write_err &= 0xfe;
 			utp_err->UTR_write_err++;
+			utp_err->UTP_err++;
 		} else if (opcode == READ_10) {
 			utp_err->UTR_read_err &= 0xfe;
 			utp_err->UTR_read_err++;
+			utp_err->UTP_err++;
 		} else if (opcode == SYNCHRONIZE_CACHE) {
 			utp_err->UTR_sync_cache_err &= 0xfe;
 			utp_err->UTR_sync_cache_err++;
+			utp_err->UTP_err++;
 		} else if (opcode == UNMAP) {
 			utp_err->UTR_unmap_err &= 0xfe;
 			utp_err->UTR_unmap_err++;
+			utp_err->UTP_err++;
 		} else {
 			utp_err->UTR_etc_err &= 0xfe;
 			utp_err->UTR_etc_err++;
+			utp_err->UTP_err++;
 		}
 	}
-	utp_err->UTP_err++;
 }
 
 static void SEC_ufs_query_error_check(struct ufs_hba *hba, enum dev_cmd_type cmd_type)
@@ -439,6 +444,7 @@ static void SEC_ufs_query_error_check(struct ufs_hba *hba, enum dev_cmd_type cmd
 	if (cmd_type == DEV_CMD_TYPE_NOP) {
 		query_cnt->NOP_err &= 0xfe;
 		query_cnt->NOP_err++;
+		query_cnt->Query_err++;
 	} else {
 		switch (opcode) {
 		case UPIU_QUERY_OPCODE_READ_DESC:
@@ -476,9 +482,9 @@ static void SEC_ufs_query_error_check(struct ufs_hba *hba, enum dev_cmd_type cmd
 		default:
 			break;
 		}
+		if (opcode && opcode < UPIU_QUERY_OPCODE_MAX)
+			query_cnt->Query_err++;
 	}
-	query_cnt->Query_err++;
-
 }
 #endif	// SEC_UFS_ERROR_COUNT
 
@@ -1421,10 +1427,6 @@ ufshcd_send_uic_cmd(struct ufs_hba *hba, struct uic_command *uic_cmd)
 	spin_unlock_irqrestore(hba->host->host_lock, flags);
 	if (!ret)
 		ret = ufshcd_wait_for_uic_cmd(hba, uic_cmd);
-#if defined(SEC_UFS_ERROR_COUNT)
-	else
-		SEC_ufs_uic_error_check(hba, true, false);
-#endif
 
 	mutex_unlock(&hba->uic_cmd_mutex);
 
@@ -1720,10 +1722,12 @@ static void ufshcd_prepare_req_desc_hdr(struct ufshcd_lrb *lrbp,
 		/*
 		 * Set High Priority for SYNC writes
 		 */
+#define FLUSH_DISCARD (REQ_FLUSH | REQ_DISCARD)
 		if ((lrbp->command_type == UTP_CMD_TYPE_SCSI) &&
 			(lrbp->cmd->request->cmd_flags & REQ_SYNC) &&
-			!(lrbp->cmd->request->cmd_flags & REQ_FLUSH)) {
+			!(lrbp->cmd->request->cmd_flags & FLUSH_DISCARD)) {
 			*upiu_flags |= UPIU_COMMAND_PRIORITY_HIGH;
+#undef FLUSH_DISCARD
 		}
 #endif
 	} else {
@@ -1982,17 +1986,6 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 		clear_bit_unlock(tag, &hba->lrb_in_use);
 		goto out;
 	}
-
-	/* IO svc time latency histogram */
-	if (hba != NULL && cmd->request != NULL) {
-		if (hba->latency_hist_enabled &&
-		    (cmd->request->cmd_type == REQ_TYPE_FS)) {
-			cmd->request->lat_hist_io_start = ktime_get();
-			cmd->request->lat_hist_enabled = 1;
-		} else
-			cmd->request->lat_hist_enabled = 0;
-	}
-
 	WARN_ON(hba->clk_gating.state != CLKS_ON);
 
 	lrbp = &hba->lrb[tag];
@@ -2033,6 +2026,9 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 	spin_lock_irqsave(hba->host->host_lock, flags);
 	if (hba->vops && hba->vops->set_nexus_t_xfer_req)
 		hba->vops->set_nexus_t_xfer_req(hba, tag, lrbp->cmd);
+#ifdef CONFIG_SCSI_UFS_CMD_LOGGING
+	exynos_ufs_cmd_log_start(hba, cmd);
+#endif
 	ufshcd_send_command(hba, tag);
 
 	if (hba->monitor.flag & UFSHCD_MONITOR_LEVEL1)
@@ -2258,7 +2254,7 @@ out_put_tag:
 	ufshcd_put_dev_cmd_tag(hba, tag);
 	wake_up(&hba->dev_cmd.tag_wq);
 #if defined(SEC_UFS_ERROR_COUNT)
-	if (err)
+	if (err && (cmd_type != DEV_CMD_TYPE_NOP))
 		SEC_ufs_query_error_check(hba, cmd_type);
 #endif
 	return err;
@@ -3234,7 +3230,6 @@ out:
 	/* Dump debugging information to system memory */
 	if (ret) {
 #if defined(SEC_UFS_ERROR_COUNT)
-		SEC_ufs_uic_error_check(hba, true, false);
 		SEC_ufs_operation_check(hba, cmd->command);
 #endif
 		ufshcd_vops_dbg_register_dump(hba);
@@ -3824,7 +3819,7 @@ static int ufshcd_link_startup(struct ufs_hba *hba)
 		 * but we can't be sure if the link is up until link startup
 		 * succeeds. So reset the local Uni-Pro and try again.
 		 */
-		if (ret && ufshcd_hba_enable(hba))
+		if ((ret && !retries) || (ret && ufshcd_hba_enable(hba)))
 			goto out;
 	} while (ret && retries--);
 
@@ -3885,8 +3880,12 @@ static int ufshcd_verify_dev_init(struct ufs_hba *hba)
 	mutex_unlock(&hba->dev_cmd.lock);
 	ufshcd_release(hba);
 
-	if (err)
+	if (err) {
+#if defined(SEC_UFS_ERROR_COUNT)
+		SEC_ufs_query_error_check(hba, DEV_CMD_TYPE_NOP);
+#endif
 		dev_err(hba->dev, "%s: NOP OUT failed %d\n", __func__, err);
+	}
 	return err;
 }
 
@@ -4283,7 +4282,6 @@ static void __ufshcd_transfer_req_compl(struct ufs_hba *hba, int reason)
 	u32 tr_doorbell;
 	int result;
 	int index;
-	struct request *req;
 
 	/* Resetting interrupt aggregation counters first and reading the
 	 * DOOR_BELL afterward allows us to handle all the completed requests.
@@ -4315,24 +4313,11 @@ static void __ufshcd_transfer_req_compl(struct ufs_hba *hba, int reason)
 			/* Mark completed command as NULL in LRB */
 			lrbp->cmd = NULL;
 			clear_bit_unlock(index, &hba->lrb_in_use);
-			req = cmd->request;
-			if (req) {
-				/* Update IO svc time latency histogram */
-				if (req->lat_hist_enabled) {
-					ktime_t completion;
-					u_int64_t delta_us;
-
-					completion = ktime_get();
-					delta_us = ktime_us_delta(completion,
-						  req->lat_hist_io_start);
-					/* rq_data_dir() => true if WRITE */
-					blk_update_latency_hist(&hba->io_lat_s,
-						(rq_data_dir(req) == READ),
-						delta_us);
-				}
-			}
 			/* Do not touch lrbp after scsi done */
 			cmd->scsi_done(cmd);
+#ifdef CONFIG_SCSI_UFS_CMD_LOGGING
+			exynos_ufs_cmd_log_end(hba, index);
+#endif
 			__ufshcd_release(hba);
 
 			if (hba->monitor.flag & UFSHCD_MONITOR_LEVEL1)
@@ -4817,7 +4802,8 @@ static void ufshcd_update_uic_error(struct ufs_hba *hba)
 	dev_dbg(hba->dev, "%s: UIC error flags = 0x%08x\n",
 			__func__, hba->uic_error);
 #if defined(SEC_UFS_ERROR_COUNT)
-	SEC_ufs_uic_error_check(hba, true, false);
+	if (hba->uic_error)
+		SEC_ufs_uic_error_check(hba, true, false);
 #endif
 }
 
@@ -5746,6 +5732,9 @@ out:
 	if (ret && re_cnt++ < UFS_LINK_SETUP_RETRIES) {
 		dev_err(hba->dev, "%s failed with err %d, retrying:%d\n",
 			__func__, ret, re_cnt);
+#if defined(CONFIG_SCSI_UFS_TEST_MODE)
+		ufshcd_vops_dbg_register_dump(hba);
+#endif			
 		goto retry;
 	} else if (ret && re_cnt >= UFS_LINK_SETUP_RETRIES) {
 		dev_err(hba->dev, "%s failed after retries with err %d\n",
@@ -6538,7 +6527,7 @@ static int ufshcd_set_dev_pwr_mode(struct ufs_hba *hba,
 	 * already suspended childs.
 	 */
 	ret = scsi_execute_req_flags(sdp, cmd, DMA_NONE, NULL, 0, &sshdr,
-				     START_STOP_TIMEOUT, 0, NULL, REQ_PM);
+				     UFS_START_STOP_TIMEOUT, 2, NULL, REQ_PM);
 	if (ret) {
 		sdev_printk(KERN_WARNING, sdp,
 			    "START_STOP failed for power mode: %d, result %x\n",
@@ -7132,54 +7121,6 @@ out:
 }
 EXPORT_SYMBOL(ufshcd_shutdown);
 
-/*
- * Values permitted 0, 1, 2.
- * 0 -> Disable IO latency histograms (default)
- * 1 -> Enable IO latency histograms
- * 2 -> Zero out IO latency histograms
- */
-static ssize_t
-latency_hist_store(struct device *dev, struct device_attribute *attr,
-		   const char *buf, size_t count)
-{
-	struct ufs_hba *hba = dev_get_drvdata(dev);
-	long value;
-
-	if (kstrtol(buf, 0, &value))
-		return -EINVAL;
-	if (value == BLK_IO_LAT_HIST_ZERO)
-		blk_zero_latency_hist(&hba->io_lat_s);
-	else if (value == BLK_IO_LAT_HIST_ENABLE ||
-		 value == BLK_IO_LAT_HIST_DISABLE)
-		hba->latency_hist_enabled = value;
-	return count;
-}
-
-ssize_t
-latency_hist_show(struct device *dev, struct device_attribute *attr,
-		  char *buf)
-{
-	struct ufs_hba *hba = dev_get_drvdata(dev);
-
-	return blk_latency_hist_show(&hba->io_lat_s, buf);
-}
-
-static DEVICE_ATTR(latency_hist, S_IRUGO | S_IWUSR,
-		   latency_hist_show, latency_hist_store);
-
-static void
-ufshcd_init_latency_hist(struct ufs_hba *hba)
-{
-	if (device_create_file(hba->dev, &dev_attr_latency_hist))
-		dev_err(hba->dev, "Failed to create latency_hist sysfs entry\n");
-}
-
-static void
-ufshcd_exit_latency_hist(struct ufs_hba *hba)
-{
-	device_create_file(hba->dev, &dev_attr_latency_hist);
-}
-
 /**
  * ufshcd_remove - de-allocate SCSI host and host memory space
  *		data structure memory
@@ -7195,7 +7136,6 @@ void ufshcd_remove(struct ufs_hba *hba)
 	scsi_host_put(hba->host);
 
 	ufshcd_exit_clk_gating(hba);
-	ufshcd_exit_latency_hist(hba);
 #if defined(CONFIG_PM_DEVFREQ)
 	if (ufshcd_is_clkscaling_enabled(hba))
 		devfreq_remove_device(hba->devfreq);
@@ -7250,7 +7190,7 @@ static void ufshcd_add_unique_number_sysfs_nodes(struct ufs_hba *hba)
 	hba->unique_number_attr.store = NULL;
 	sysfs_attr_init(&hba->unique_number_attr.attr);
 	hba->unique_number_attr.attr.name = "unique_number";
-	hba->unique_number_attr.attr.mode = S_IRUGO;
+	hba->unique_number_attr.attr.mode = S_IRUSR|S_IRGRP;
 	if (device_create_file(dev, &hba->unique_number_attr))
 		dev_err(hba->dev, "Failed to create sysfs for unique_number\n");
 }
@@ -7722,14 +7662,16 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	}
 #endif
 
+#if defined(CONFIG_SCSI_UFS_TEST_MODE)
+	dev_info(hba->dev, "UFS test mode enabled\n");
+#endif
+
 	/* init ufs_sec_debug function */
 	ufs_sec_send_errinfo(hba);
 	ufs_debug_func = ufs_sec_send_errinfo;
 
 	/* Hold auto suspend until async scan completes */
 	pm_runtime_get_sync(dev);
-
-	ufshcd_init_latency_hist(hba);
 
 	/*
 	 * The device-initialize-sequence hasn't been invoked yet.
@@ -7750,7 +7692,6 @@ out_remove_scsi_host:
 #endif
 exit_gating:
 	ufshcd_exit_clk_gating(hba);
-	ufshcd_exit_latency_hist(hba);
 out_disable:
 	hba->is_irq_enabled = false;
 	scsi_host_put(host);

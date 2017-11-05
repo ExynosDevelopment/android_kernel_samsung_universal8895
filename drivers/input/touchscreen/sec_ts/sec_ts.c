@@ -701,7 +701,7 @@ static int sec_ts_i2c_read_bulk(struct sec_ts_data *ts, u8 *data, int len)
 
 	return -EIO;
 }
-static int sec_ts_read_from_sponge(struct sec_ts_data *ts, u8 *data)
+static int sec_ts_read_from_sponge(struct sec_ts_data *ts, u8 *data, int len)
 {
 	int ret;
 
@@ -709,7 +709,7 @@ static int sec_ts_read_from_sponge(struct sec_ts_data *ts, u8 *data)
 	if (ret < 0)
 		input_err(true, &ts->client->dev, "%s: fail to read sponge command\n", __func__);
 
-	ret = sec_ts_i2c_read(ts, SEC_TS_CMD_SPONGE_READ_PARAM, (u8 *)data, sizeof((u8 *)(data)));
+	ret = sec_ts_i2c_read(ts, SEC_TS_CMD_SPONGE_READ_PARAM, (u8 *)data, len);
 	if (ret < 0)
 		input_err(true, &ts->client->dev, "%s: fail to read sponge command\n", __func__);
 
@@ -825,7 +825,7 @@ int sec_ts_read_calibration_report(struct sec_ts_data *ts)
 	return buf[4];
 }
 
-static void sec_ts_reinit(struct sec_ts_data *ts)
+void sec_ts_reinit(struct sec_ts_data *ts)
 {
 	u8 w_data[2] = {0x00, 0x00};
 	int ret = 0;
@@ -1236,7 +1236,7 @@ static void sec_ts_read_event(struct sec_ts_data *ts)
 			if ((p_gesture_status->eid == 0x02) && (p_gesture_status->stype == 0x00)) {
 				u8 sponge[3] = { 0 };
 
-				ret = sec_ts_read_from_sponge(ts, sponge);
+				ret = sec_ts_read_from_sponge(ts, sponge, 3);
 				if (ret < 0)
 					input_err(true, &ts->client->dev, "%s: fail to read sponge data\n", __func__);
 
@@ -1249,7 +1249,7 @@ static void sec_ts_read_event(struct sec_ts_data *ts)
 					if (sponge[1] & SEC_TS_MODE_SPONGE_AOD) {
 						u8 data[5] = { 0x0A, 0x00, 0x00, 0x00, 0x00 };
 
-						ret = sec_ts_read_from_sponge(ts, data);
+						ret = sec_ts_read_from_sponge(ts, data, 5);
 						if (ret < 0)
 							input_err(true, &ts->client->dev, "%s: fail to read sponge data\n", __func__);
 

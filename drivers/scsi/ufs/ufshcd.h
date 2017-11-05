@@ -691,10 +691,6 @@ struct ufs_hba {
 	struct devfreq *devfreq;
 	struct ufs_clk_scaling clk_scaling;
 	bool is_sys_suspended;
-
-	int			latency_hist_enabled;
-	struct io_latency_state io_lat_s;
-
 #if defined(CONFIG_FIPS_FMP)
 	struct buffer_head *self_test_bh;
 	uint32_t self_test_mode;
@@ -989,6 +985,10 @@ static inline void ufshcd_vops_dbg_register_dump(struct ufs_hba *hba)
 {
 	if (hba->vops && hba->vops->dbg_register_dump)
 		hba->vops->dbg_register_dump(hba);
+#if defined(CONFIG_SCSI_UFS_TEST_MODE)
+	/* do not recover system if test mode is enabled */
+	BUG();
+#endif
 }
 
 static inline u8 ufshcd_vops_get_unipro(struct ufs_hba *hba, int num)

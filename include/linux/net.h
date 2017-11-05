@@ -121,6 +121,11 @@ struct socket {
 	struct file		*file;
 	struct sock		*sk;
 	const struct proto_ops	*ops;
+    /* START_OF_KNOX_VPN */
+    __u64   knox_sent;
+    __u64   knox_recv;
+    __u64   open_time;
+    /* END_OF_KNOX_VPN */
 };
 
 struct vm_area_struct;
@@ -251,8 +256,7 @@ do {									\
 	DEFINE_DYNAMIC_DEBUG_METADATA(descriptor, fmt);			\
 	if (unlikely(descriptor.flags & _DPRINTK_FLAGS_PRINT) &&	\
 	    net_ratelimit())						\
-		__dynamic_pr_debug(&descriptor, pr_fmt(fmt),		\
-		                   ##__VA_ARGS__);			\
+		__dynamic_pr_debug(&descriptor, fmt, ##__VA_ARGS__);	\
 } while (0)
 #elif defined(DEBUG)
 #define net_dbg_ratelimited(fmt, ...)				\

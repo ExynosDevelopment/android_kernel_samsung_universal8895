@@ -250,7 +250,7 @@ int fimc_is_devicemgr_binding(struct fimc_is_devicemgr *devicemgr,
 
 			child_group = GET_HEAD_GROUP_IN_DEVICE(FIMC_IS_DEVICE_ISCHAIN, group);
 			if (child_group) {
-				info("[%d/%d] sensor otf output set",
+				info("[%d/%d] sensor otf output set\n",
 					sensor->instance, ischain->instance);
 				set_bit(FIMC_IS_SENSOR_OTF_OUTPUT, &sensor->state);
 			}

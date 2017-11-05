@@ -248,6 +248,8 @@ static int request_receive(void *address, u32 size)
 
 	/* Check server state */
 	bool server_ok;
+	/* ExySp */
+	unsigned long timeout = msecs_to_jiffies(10 * 1000); /* 10 seconds */
 
 	mutex_lock(&g_request.states_mutex);
 	server_ok = (g_request.server_state == RESPONSE_SENT) ||
@@ -269,7 +271,11 @@ static int request_receive(void *address, u32 size)
 	complete(&g_request.client_complete);
 
 	/* Wait for data (far too late to be interruptible) */
-	wait_for_completion(&g_request.server_complete);
+	/* ExySp */
+	if (wait_for_completion_timeout(&g_request.server_complete, timeout) == 0) {
+		mc_dev_err("request_receive::daemon is not responding\n");
+		return -EPIPE;
+	}
 
 	/* Reset reception buffer */
 	g_request.buffer = NULL;

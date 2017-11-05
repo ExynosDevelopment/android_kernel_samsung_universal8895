@@ -53,12 +53,38 @@
 #include "muic_apis.h"
 #include "muic_i2c.h"
 #include "muic_vps.h"
+#include "muic_regmap.h"
 
 #if defined(CONFIG_MUIC_SUPPORT_CCIC)
 #include "muic_ccic.h"
 #endif
 
 extern void muic_send_dock_intent(int type);
+
+static void update_jig_state(muic_data_t *pmuic)
+{
+	int jig_state;
+
+	switch (pmuic->attached_dev) {
+	case ATTACHED_DEV_JIG_UART_OFF_MUIC:
+	case ATTACHED_DEV_JIG_UART_OFF_VB_MUIC:     /* VBUS enabled */
+	case ATTACHED_DEV_JIG_UART_OFF_VB_OTG_MUIC:    /* for otg test */
+	case ATTACHED_DEV_JIG_UART_OFF_VB_FG_MUIC:    /* for fg test */
+	case ATTACHED_DEV_JIG_UART_ON_MUIC:
+	case ATTACHED_DEV_JIG_UART_ON_VB_MUIC:       /* VBUS enabled */
+	case ATTACHED_DEV_JIG_USB_OFF_MUIC:
+	case ATTACHED_DEV_JIG_USB_ON_MUIC:
+		jig_state = true;
+		break;
+	default:
+		jig_state = false;
+		break;
+	}
+	pr_err("%s:%s jig_state : %d\n", MUIC_DEV_NAME, __func__, jig_state);
+
+	if (pmuic->pdata->jig_uart_cb)
+		pmuic->pdata->jig_uart_cb(jig_state);
+}
 
 static void muic_handle_attach(muic_data_t *pmuic,
 			muic_attached_dev_t new_dev, int adc, u8 vbvolt)
@@ -497,6 +523,7 @@ void muic_detect_dev(muic_data_t *pmuic, int irq)
 	muic_attached_dev_t new_dev = ATTACHED_DEV_UNKNOWN_MUIC;
 	int intr = MUIC_INTR_DETACH;
 	u8 adc = 0, vbvolt = 0;
+	struct vendor_ops *pvendor = pmuic->regmapdesc->vendorops;
 #if defined(CONFIG_SEC_FACTORY) && defined(CONFIG_MUIC_UNIVERSAL_MAX77865)
 	struct i2c_client *i2c = pmuic->i2c;
 	u8 val = 0;
@@ -553,6 +580,16 @@ void muic_detect_dev(muic_data_t *pmuic, int irq)
 	}
 
 #if defined(CONFIG_MUIC_SUPPORT_CCIC)
+	/* W/A of incomplete insertion case */
+	if (new_dev == ATTACHED_DEV_USB_MUIC) {
+		if (irq == (-1)) {
+			if (pvendor && pvendor->run_chgdet) {
+				pvendor->run_chgdet(pmuic->regmapdesc, 1);
+				intr = MUIC_INTR_DETACH;
+			}
+		} else if (pmuic->is_dcdtmr_intr)
+			new_dev = ATTACHED_DEV_TIMEOUT_OPEN_MUIC;
+	}
 	if (new_dev == ATTACHED_DEV_USB_MUIC && pmuic->is_dcdtmr_intr) {
 		new_dev = ATTACHED_DEV_TIMEOUT_OPEN_MUIC;
 	}
@@ -569,6 +606,8 @@ void muic_detect_dev(muic_data_t *pmuic, int irq)
 		muic_handle_attach(pmuic, new_dev, adc, vbvolt);
 	else
 		muic_handle_detach(pmuic);
+
+	update_jig_state(pmuic);
 
 #if defined(CONFIG_MUIC_HV_MAX77854) || defined(CONFIG_MUIC_HV_MAX77865)
 	/* AFC should refer to the change of attached_dev */

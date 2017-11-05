@@ -18,9 +18,7 @@
 #include <trace/events/sched.h>
 
 #include "sched.h"
-#ifdef CONFIG_FREQVAR_SCHEDTUNE
 #include "tune.h"
-#endif
 
 struct sugov_tunables {
 	struct gov_attr_set attr_set;
@@ -496,10 +494,8 @@ static int sugov_init(struct cpufreq_policy *policy)
 	if (lat)
 		tunables->rate_limit_us *= lat;
 
-#ifdef CONFIG_FREQVAR_SCHEDTUNE
 	/* init freqvar_boost */
 	schedtune_freqvar_boost_init(policy, &tunables->freqvar_boost);
-#endif
 
 	policy->governor_data = sg_policy;
 	sg_policy->tunables = tunables;
@@ -517,9 +513,7 @@ static int sugov_init(struct cpufreq_policy *policy)
 
  fail:
 	policy->governor_data = NULL;
-#ifdef CONFIG_FREQVAR_SCHEDTUNE
 	schedtune_freqvar_boost_exit(policy, &tunables->freqvar_boost);
-#endif
 	sugov_tunables_free(tunables);
 
  free_sg_policy:
@@ -541,9 +535,7 @@ static int sugov_exit(struct cpufreq_policy *policy)
 	count = gov_attr_set_put(&tunables->attr_set, &sg_policy->tunables_hook);
 	policy->governor_data = NULL;
 	if (!count) {
-#ifdef CONFIG_FREQVAR_SCHEDTUNE
 		schedtune_freqvar_boost_exit(policy, &tunables->freqvar_boost);
-#endif
 		sugov_tunables_free(tunables);
 	}
 

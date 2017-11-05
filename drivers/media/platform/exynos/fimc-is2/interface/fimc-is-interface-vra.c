@@ -47,7 +47,8 @@ static void fimc_is_lib_vra_callback_output_ready(u32 instance,
 	info_lib("------ num_all_faces(%d) -------\n", num_all_faces);
 #endif
 
-	lib_vra->out_list_info[instance] = out_list_info_ptr;
+	memcpy(&lib_vra->out_list_info[instance], (void *)out_list_info_ptr,
+		sizeof(lib_vra->out_list_info[instance]));
 	lib_vra->all_face_num[instance] = (num_all_faces > lib_vra->max_face_num) ?
 				0 : num_all_faces;
 
@@ -136,10 +137,10 @@ void fimc_is_lib_vra_task_trigger(struct fimc_is_lib_vra *lib_vra,
 
 	spin_lock(&task_vra->work_lock);
 
-	task_vra->work[task_vra->work_index % FIMC_IS_MAX_TASK].func = func;
-	task_vra->work[task_vra->work_index % FIMC_IS_MAX_TASK].params = lib_vra;
+	task_vra->work[task_vra->work_index % LIB_MAX_TASK].func = func;
+	task_vra->work[task_vra->work_index % LIB_MAX_TASK].params = lib_vra;
 	task_vra->work_index++;
-	work_index = (task_vra->work_index - 1) % FIMC_IS_MAX_TASK;
+	work_index = (task_vra->work_index - 1) % LIB_MAX_TASK;
 
 	spin_unlock(&task_vra->work_lock);
 
@@ -265,7 +266,7 @@ int fimc_is_lib_vra_init_task(struct fimc_is_lib_vra *lib_vra)
 	}
 
 	lib_vra->task_vra.work_index = 0;
-	for (j = 0; j < FIMC_IS_MAX_TASK; j++) {
+	for (j = 0; j < LIB_MAX_TASK; j++) {
 		lib_vra->task_vra.work[j].func = NULL;
 		lib_vra->task_vra.work[j].params = NULL;
 		init_kthread_work(&lib_vra->task_vra.work[j].work,
@@ -872,6 +873,9 @@ int fimc_is_lib_vra_update_dm(struct fimc_is_lib_vra *lib_vra, u32 instance,
 		memset(&dm->faceScores, 0, sizeof(dm->faceScores));
 		memset(&dm->faceLandmarks, 0, sizeof(dm->faceIds));
 	}
+
+	dm->faceSrcImageSize[0] = lib_vra->out_list_info[instance].in_sizes.width;
+	dm->faceSrcImageSize[1] = lib_vra->out_list_info[instance].in_sizes.height;
 
 	for (face_num = 0; face_num < lib_vra->all_face_num[instance]; face_num++) {
 		base = &lib_vra->out_faces[instance][face_num].base;

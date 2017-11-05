@@ -46,7 +46,7 @@
 /* respond timeout for MCP notification, in secs */
 #define MCP_TIMEOUT		10
 /* ExySp */
-#define MCP_RETRIES		2
+#define MCP_RETRIES		5
 #define MCP_NF_QUEUE_SZ		8
 
 static struct {
@@ -63,7 +63,7 @@ static struct {
 	/* Wait timeout */
 	u32			timeout;
 	/* Log of last MCP commands */
-#define MCP_LOG_SIZE 256
+#define MCP_LOG_SIZE 1024
 	struct mutex		last_mcp_cmds_mutex; /* Log protection */
 	struct mcp_command_info {
 		u64			cpu_clk;	/* Kernel time */

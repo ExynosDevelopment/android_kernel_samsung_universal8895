@@ -52,8 +52,6 @@ struct swap_info_struct;
 struct seq_file;
 struct workqueue_struct;
 struct iov_iter;
-struct fscrypt_info;
-struct fscrypt_operations;
 
 extern void __init inode_init(void);
 extern void __init inode_init_early(void);
@@ -234,7 +232,6 @@ typedef void (dax_iodone_t)(struct buffer_head *bh_map, int uptodate);
 #define ATTR_KILL_PRIV	(1 << 14)
 #define ATTR_OPEN	(1 << 15) /* Truncating from open(O_TRUNC) */
 #define ATTR_TIMES_SET	(1 << 16)
-#define ATTR_TOUCH	(1 << 17)
 
 /*
  * Whiteout is represented by a char device.  The following constants define the
@@ -703,16 +700,8 @@ struct inode {
 	struct hlist_head	i_fsnotify_marks;
 #endif
 
-#if IS_ENABLED(CONFIG_FS_ENCRYPTION)
-	struct fscrypt_info	*i_crypt_info;
-#endif
 	void			*i_private; /* fs or device private pointer */
 };
-
-static inline unsigned int i_blocksize(const struct inode *node)
-{
-	return (1 << node->i_blkbits);
-}
 
 static inline int inode_unhashed(struct inode *inode)
 {
@@ -744,31 +733,6 @@ enum inode_i_mutex_lock_class
 	I_MUTEX_NONDIR2,
 	I_MUTEX_PARENT2,
 };
-
-static inline void inode_lock(struct inode *inode)
-{
-	mutex_lock(&inode->i_mutex);
-}
-
-static inline void inode_unlock(struct inode *inode)
-{
-	mutex_unlock(&inode->i_mutex);
-}
-
-static inline int inode_trylock(struct inode *inode)
-{
-	return mutex_trylock(&inode->i_mutex);
-}
-
-static inline int inode_is_locked(struct inode *inode)
-{
-	return mutex_is_locked(&inode->i_mutex);
-}
-
-static inline void inode_lock_nested(struct inode *inode, unsigned subclass)
-{
-	mutex_lock_nested(&inode->i_mutex, subclass);
-}
 
 void lock_two_nondirectories(struct inode *, struct inode*);
 void unlock_two_nondirectories(struct inode *, struct inode*);
@@ -1365,8 +1329,6 @@ struct super_block {
 	void                    *s_security;
 #endif
 	const struct xattr_handler **s_xattr;
-
-	const struct fscrypt_operations	*s_cop;
 
 	struct hlist_bl_head	s_anon;		/* anonymous dentries for (nfs) exporting */
 	struct list_head	s_mounts;	/* list of mounts; _not_ for fs use */
@@ -3095,8 +3057,8 @@ static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)
 }
 static inline bool dir_relax(struct inode *inode)
 {
-	inode_unlock(inode);
-	inode_lock(inode);
+	mutex_unlock(&inode->i_mutex);
+	mutex_lock(&inode->i_mutex);
 	return !IS_DEADDIR(inode);
 }
 

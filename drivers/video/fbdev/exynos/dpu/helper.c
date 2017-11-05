@@ -26,6 +26,8 @@
 #include "../panel/panel_drv.h"
 #include <video/mipi_display.h>
 
+char acquire_fence_log[ACQUIRE_FENCE_LEN];
+
 static int __dpu_match_dev(struct device *dev, void *data)
 {
 	struct dpp_device *dpp;
@@ -336,7 +338,7 @@ void decon_create_timeline(struct decon_device *decon, char *name)
 		decon->timeline_max = 1;
 }
 
-int decon_create_fence(struct decon_device *decon)
+int decon_create_fence(struct decon_device *decon, struct decon_reg_data *regs)
 {
 	struct sync_fence *fence;
 	struct sync_pt *pt;
@@ -356,6 +358,9 @@ int decon_create_fence(struct decon_device *decon)
 		goto err;
 	}
 
+	if (regs)
+		regs->pt = pt;
+
 	fd = get_unused_fd_flags(0);
 	if (fd < 0) {
 		decon_err("%s: failed to get unused fd\n", __func__);
@@ -372,12 +377,14 @@ err:
 
 void decon_wait_fence(struct sync_fence *fence)
 {
-	int err = sync_fence_wait(fence, 900);
-	if (err >= 0)
-		return;
+	int err = 0;
 
+	snprintf(acquire_fence_log, ACQUIRE_FENCE_LEN, "%p:%s:%d",
+			fence, fence->name, atomic_read(&fence->status));
+
+	err = sync_fence_wait(fence, 900);
 	if (err < 0)
-		decon_warn("error waiting on acquire fence: %d\n", err);
+		decon_warn("%s: error waiting on acquire fence: %d\n", acquire_fence_log, err);
 }
 
 void decon_signal_fence(struct decon_device *decon)
@@ -612,4 +619,35 @@ void dpu_dump_data_to_console(void *v_addr, int buf_size, int id)
 
 	print_hex_dump(KERN_INFO, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			v_addr, buf_size, false);
+}
+
+void dpu_clear_all_irq(struct decon_device *decon)
+{
+	int i;
+	u32 mgr_id = 0;
+	struct v4l2_subdev *sd;
+
+	/* dsim */
+	if (decon->dt.out_type == DECON_OUT_DSI) {
+		sd = decon->out_sd[0];
+		v4l2_subdev_call(sd, core, ioctl, DSIM_IOC_CLEAR_IRQ, NULL);
+	}
+
+	/* displayport : add code if necessary */
+
+	/* decon */
+	decon_reg_clear_int_all(decon->id);
+
+	/* dma & dpp */
+	if (decon->id == 0) {
+		sd = decon->dpp_sd[IDMA_G0];
+		v4l2_subdev_call(sd, core, ioctl, DPP_CLEAR_IRQ, NULL);
+	}
+	for (i = IDMA_G1; i < MAX_DPP_SUBDEV; i++) {
+		mgr_id = decon_reg_get_rsc_dma_info(decon->id, i);
+		if (mgr_id == decon->id) {
+			sd = decon->dpp_sd[i];
+			v4l2_subdev_call(sd, core, ioctl, DPP_CLEAR_IRQ, NULL);
+		}
+	}
 }

@@ -303,6 +303,9 @@ struct modem_io_t {
 	u32 attrs;
 	char *app;
 	char *option_region;
+#ifdef CONFIG_LINK_DEVICE_NAPI
+	int napi_weight;
+#endif /* CONFIG_LINK_DEVICE_NAPI */
 #if 1/*defined(CONFIG_LINK_DEVICE_MEMORY_SBD)*/
 	unsigned int ul_num_buffers;
 	unsigned int ul_buffer_size;
@@ -410,6 +413,9 @@ struct modem_mbox {
 
 	unsigned int sbi_uart_noti_mask;
 	unsigned int sbi_uart_noti_pos;
+
+	unsigned int sbi_crash_type_mask;
+	unsigned int sbi_crash_type_pos;
 
 	/* Clk table Info */
 	unsigned int *ap_clk_table;

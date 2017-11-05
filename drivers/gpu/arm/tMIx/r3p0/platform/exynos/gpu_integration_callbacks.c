@@ -315,20 +315,70 @@ int gpu_memory_seq_show(struct seq_file *sfile, void *data)
 void gpu_update_status(void *dev, char *str, u32 val)
 {
 	struct kbase_device *kbdev;
+	struct exynos_context *platform;
+	int i, fault_count = 0;
+	char *env[2] = {"FEATURE=GPUI", NULL};
 
 	kbdev = (struct kbase_device *)dev;
 	KBASE_DEBUG_ASSERT(kbdev != NULL);
 
+	platform = (struct exynos_context *) kbdev->platform_context;
 	if(strcmp(str, "completion_code") == 0)
 	{
-		if(val == 0x58) /* DATA_INVALID_FAULT */
-			((struct exynos_context *)kbdev->platform_context)->data_invalid_fault_count ++;
-		else if((val & 0xf0) == 0xc0) /* MMU_FAULT */
-			((struct exynos_context *)kbdev->platform_context)->mmu_fault_count ++;
-
+		if(val == 0x40)
+			platform->gpu_exception_count[GPU_JOB_CONFIG_FAULT]++;
+		else if(val == 0x41)
+			platform->gpu_exception_count[GPU_JOB_POWER_FAULT]++;
+		else if(val == 0x42)
+			platform->gpu_exception_count[GPU_JOB_READ_FAULT]++;
+		else if(val == 0x43)
+			platform->gpu_exception_count[GPU_JOB_WRITE_FAULT]++;
+		else if(val == 0x44)
+			platform->gpu_exception_count[GPU_JOB_AFFINITY_FAULT]++;
+		else if(val == 0x48)
+			platform->gpu_exception_count[GPU_JOB_BUS_FAULT]++;
+		else if(val == 0x58)
+			platform->gpu_exception_count[GPU_DATA_INVALIDATE_FAULT]++;
+		else if(val == 0x59)
+			platform->gpu_exception_count[GPU_TILE_RANGE_FAULT]++;
+		else if(val == 0x60)
+			platform->gpu_exception_count[GPU_OUT_OF_MEMORY_FAULT]++;
+		// GPU FAULT
+		else if(val == 0x80)
+			platform->gpu_exception_count[GPU_DELAYED_BUS_FAULT]++;
+		else if(val == 0x88)
+			platform->gpu_exception_count[GPU_SHAREABILITY_FAULT]++;
+		// MMU FAULT
+		else if(val >= 0xC0 && val <= 0xC7)
+			platform->gpu_exception_count[GPU_MMU_TRANSLATION_FAULT]++;
+		else if(val >= 0xC8 && val <= 0xCF)
+			platform->gpu_exception_count[GPU_MMU_PERMISSION_FAULT]++;
+		else if(val >= 0xD0 && val <= 0xD7)
+			platform->gpu_exception_count[GPU_MMU_TRANSTAB_BUS_FAULT]++;
+		else if(val >= 0xD8 && val <= 0xDF)
+			platform->gpu_exception_count[GPU_MMU_ACCESS_FLAG_FAULT]++;
+		else if(val >= 0xE0 && val <= 0xE7)
+			platform->gpu_exception_count[GPU_MMU_ADDRESS_SIZE_FAULT]++;
+		else if(val >= 0xE8 && val <= 0xEF)
+			platform->gpu_exception_count[GPU_MMU_MEMORY_ATTRIBUTES_FAULT]++;
+		else
+			platform->gpu_exception_count[GPU_UNKNOWN]++;
 	}
+	else if(strcmp(str, "soft_stop") == 0)
+		platform->gpu_exception_count[GPU_SOFT_STOP]++;
+	else if(strcmp(str, "hard_stop") == 0)
+		platform->gpu_exception_count[GPU_HARD_STOP]++;
 	else if(strcmp(str, "reset_count") == 0)
-		((struct exynos_context *)kbdev->platform_context)->reset_count++;
+		platform->gpu_exception_count[GPU_RESET]++;
+
+	for(i = GPU_JOB_CONFIG_FAULT; i < GPU_EXCEPTION_LIST_END; i++)
+		fault_count += platform->gpu_exception_count[i];
+
+	if(fault_count == 5)
+	{
+		kobject_uevent_env(&kbdev->dev->kobj, KOBJ_CHANGE, env);
+	}
+
 }
 
 #define KBASE_MMU_PAGE_ENTRIES	512
@@ -654,6 +704,7 @@ struct kbase_vendor_callbacks exynos_callbacks = {
 	.debug_pagetable_info = gpu_debug_pagetable_info,
 	.mem_profile_check_kctx = gpu_mem_profile_check_kctx,
 	.register_dump = gpu_register_dump,
+	.update_status = gpu_update_status,
 };
 
 uintptr_t gpu_get_callbacks(void)

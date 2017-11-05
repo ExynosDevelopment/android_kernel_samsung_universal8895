@@ -752,7 +752,7 @@ struct sec_ts_data {
 	int (*sec_ts_i2c_read)(struct sec_ts_data *ts, u8 reg, u8 *data, int len);
 	int (*sec_ts_i2c_write_burst)(struct sec_ts_data *ts, u8 *data, int len);
 	int (*sec_ts_i2c_read_bulk)(struct sec_ts_data *ts, u8 *data, int len);
-	int (*sec_ts_read_sponge)(struct sec_ts_data *ts, u8 *data);
+	int (*sec_ts_read_sponge)(struct sec_ts_data *ts, u8 *data, int len);
 };
 
 struct sec_ts_plat_data {
@@ -828,6 +828,7 @@ void sec_ts_run_rawdata_all(struct sec_ts_data *ts);
 int execute_selftest(struct sec_ts_data *ts, bool save_result);
 int sec_ts_read_raw_data(struct sec_ts_data *ts,
 		struct sec_cmd_data *sec, struct sec_ts_test_mode *mode);
+void sec_ts_reinit(struct sec_ts_data *ts);
 
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
 int sec_ts_raw_device_init(struct sec_ts_data *ts);

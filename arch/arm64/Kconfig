@@ -21,7 +21,7 @@ config ARM64
 	select ARM_GIC_V3
 	select ARM_GIC_V3_ITS if PCI_MSI
 	select ARM_PSCI_FW
-	select BUILDTIME_EXTABLE_SORT
+	select BUILDTIME_EXTABLE_SORT if !RELOCATABLE_KERNEL
 	select CLONE_BACKWARDS
 	select COMMON_CLK
 	select CPU_PM if (SUSPEND || CPU_IDLE)
@@ -48,7 +48,6 @@ config ARM64
 	select HAVE_ALIGNED_STRUCT_PAGE if SLUB
 	select HAVE_ARCH_AUDITSYSCALL
 	select HAVE_ARCH_BITREVERSE
-	select HAVE_ARCH_HARDENED_USERCOPY
 	select HAVE_ARCH_JUMP_LABEL
 	select HAVE_ARCH_KASAN if SPARSEMEM_VMEMMAP && !(ARM64_16K_PAGES && ARM64_VA_BITS_48)
 	select HAVE_ARCH_KGDB
@@ -431,15 +430,6 @@ config CAVIUM_ERRATUM_22375
 
 	  If unsure, say Y.
 
-config CAVIUM_ERRATUM_23144
-	bool "Cavium erratum 23144: ITS SYNC hang on dual socket system"
-	depends on NUMA
-	default y
-	help
-	  ITS SYNC command hang for cross node io and collections/cpu mapping.
-
-	  If unsure, say Y.
-
 config CAVIUM_ERRATUM_23154
 	bool "Cavium erratum 23154: Access to ICC_IAR1_EL1 is not sync'ed"
 	default y
@@ -447,17 +437,6 @@ config CAVIUM_ERRATUM_23154
 	  The gicv3 of ThunderX requires a modified version for
 	  reading the IAR status to ensure data synchronization
 	  (access to icc_iar1_el1 is not sync'ed before and after).
-
-	  If unsure, say Y.
-
-config CAVIUM_ERRATUM_27456
-	bool "Cavium erratum 27456: Broadcast TLBI instructions may cause icache corruption"
-	default y
-	help
-	  On ThunderX T88 pass 1.x through 2.1 parts, broadcast TLBI
-	  instructions may cause the icache to become corrupted if it
-	  contains data for a non-current ASID.  The fix is to
-	  invalidate the icache when changing the mm context.
 
 	  If unsure, say Y.
 
@@ -668,11 +647,119 @@ config HOTPLUG_CPU
 	  Say Y here to experiment with turning CPUs off and on.  CPUs
 	  can be controlled through /sys/devices/system/cpu.
 
+config TIMA
+	bool "Enable TIMA(Trustzone based Integrity Measurement Archtecture feature"
+	default n
+
+config TIMA_LKMAUTH
+	bool "Enable LKM authentication by TIMA"
+	help
+	  TIMA authenticates loaded kernel modules. Disable it if you don't
+	  want TIMA enabled.
+
+config TIMA_RKP
+	default n
+	bool "Samsung KNOX realtime kernel protection depends on TIMA"
+	help
+	  this enables realtime kernel protection
+
+config TIMA_RKP_DEBUG
+	depends on !SEC_FACTORY
+	depends on TIMA_RKP
+	default n
+	bool "Support SS Sentinel for debugging"
+	help
+	  this enables to support sentinel
+
+config RKP_KDP
+	bool "Protection for cred structure"
+	depends on !SEC_FACTORY
+	depends on TIMA_RKP
+	default n
+	help
+	  Prevents unauthorized cred modification.
+
+config RKP_NS_PROT
+	bool "Protection for namespace structure"
+	depends on !SEC_FACTORY
+	depends on RKP_KDP
+	default n
+	help
+	  Prevents unauthorized namespace modification.
+
+config RKP_DMAP_PROT
+	bool "Page Double Mapping protection"
+	depends on !SEC_FACTORY
+	depends on RKP_KDP
+	default n
+	help
+	  Prevents unauthorized mapping for page table.
+
+config RKP_6G
+	bool "Support 6G"
+	depends on TIMA_RKP
+	default n
+	help
+	  support 6G
+
 config RELOCATABLE_KERNEL
 	bool "set kernel to relocatable in both virtual and physical address"
 	default n
 	help
 	  This configuare will allow you to config the kernel into position independent kernel, with '--PIE' insert into LD script.
+
+#
+# BEGIN RKP_CFP CONFIG OPTIONS
+#
+
+menu "Control Flow Protection"
+
+config RKP_CFP
+	bool "JOPP and ROPP"
+	# depends on TIMA_RKP
+	default n
+
+config RKP_CFP_JOPP
+	bool "JOP Prevention"
+	select RKP_CFP
+	default n
+
+config RKP_CFP_JOPP_MAGIC
+	hex 
+	depends on RKP_CFP && RKP_CFP_JOPP
+	default "0x00be7bad"
+
+config RKP_CFP_ROPP
+	bool "ROP Prevention"
+	select RKP_CFP
+	select RKP_CFP_FIX_SMC_BUG
+	default n
+
+choice
+	prompt "ROPP key"
+	default RKP_CFP_ROPP_RANDOM_KEY
+	depends on RKP_CFP && RKP_CFP_ROPP
+
+config RKP_CFP_ROPP_HYPKEY
+	bool "Use hypervisor for key secure storage"
+
+config RKP_CFP_ROPP_RANDOM_KEY
+	bool "Use pseudo random key"
+
+config RKP_CFP_ROPP_ZERO_KEY
+	bool "Use zero key"
+
+endchoice
+
+config RKP_CFP_FIX_SMC_BUG
+	bool "Fix SMC compatibility issue"
+	depends on RKP_CFP_ROPP
+	default n
+endmenu
+
+#
+# END RKP_CFP CONFIG OPTIONS
+#
 
 source kernel/Kconfig.preempt
 source kernel/Kconfig.hz

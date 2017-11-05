@@ -122,14 +122,7 @@ static int init_dimming(struct panel_info *panel_data, int id,
 		return ret;
 	}
 
-	brt_tbl->brt = panel_dim_info->brt_tbl->brt;
-	brt_tbl->sz_brt = panel_dim_info->brt_tbl->sz_brt;
-	brt_tbl->lum = panel_dim_info->brt_tbl->lum;
-	brt_tbl->sz_lum = panel_dim_info->brt_tbl->sz_lum;
-	brt_tbl->brt_to_brt= panel_dim_info->brt_tbl->brt_to_brt;
-	brt_tbl->sz_brt_to_brt = panel_dim_info->brt_tbl->sz_brt_to_brt;
-	brt_tbl->brt_to_step = panel_dim_info->brt_tbl->brt_to_step;
-	brt_tbl->sz_brt_to_step = panel_dim_info->brt_tbl->sz_brt_to_step;
+	memcpy(brt_tbl, panel_dim_info->brt_tbl, sizeof(struct brightness_table));
 	nr_luminance = panel_dim_info->nr_luminance;
 	nr_hbm_luminance = panel_dim_info->nr_hbm_luminance;
 	nr_extend_hbm_luminance = panel_dim_info->nr_extend_hbm_luminance;
@@ -355,6 +348,42 @@ int getidx_irc_table(struct maptbl *tbl)
 	return getidx_brt_tbl(tbl);
 }
 
+int getidx_poc_onoff_table(struct maptbl *tbl)
+{
+	struct panel_info *panel_data;
+	struct panel_device *panel = (struct panel_device *)tbl->pdata;
+	int idx;
+
+	if (panel == NULL) {
+		panel_err("PANEL:ERR:%s:panel is null\n", __func__);
+		return -EINVAL;
+	}
+
+	panel_data = &panel->panel_data;
+
+	idx = sizeof_row(tbl) * (panel_data->props.poc_onoff ? POC_ONOFF_ON : POC_ONOFF_OFF);
+
+	return idx;
+}
+
+int getidx_irc_onoff_table(struct maptbl *tbl)
+{
+	struct panel_info *panel_data;
+	struct panel_device *panel = (struct panel_device *)tbl->pdata;
+	int idx;
+
+	if (panel == NULL) {
+		panel_err("PANEL:ERR:%s:panel is null\n", __func__);
+		return -EINVAL;
+	}
+
+	panel_data = &panel->panel_data;
+
+	idx = sizeof_row(tbl) * (panel_data->props.irc_onoff ? IRC_ONOFF_ON : IRC_ONOFF_OFF);
+
+	return idx;
+}
+
 int getidx_mps_table(struct maptbl *tbl)
 {
 	struct panel_device *panel = (struct panel_device *)tbl->pdata;
@@ -510,8 +539,7 @@ int getidx_hbm_onoff_table(struct maptbl *tbl)
 
 	panel_bl = &panel->panel_bl;
 
-	return IS_HBM_BRIGHTNESS(panel_bl->props.brightness) ||
-		IS_EXT_HBM_BRIGHTNESS(panel_bl->props.brightness);
+	return is_hbm_brightness(panel_bl, panel_bl->props.brightness);
 }
 
 int getidx_acl_opr_table(struct maptbl *tbl)
@@ -634,6 +662,108 @@ void copy_poc_maptbl(struct maptbl *tbl, u8 *dst)
 		*dst = (gray == 0x33) ? 0x64 : gray;
 
 	pr_info("%s poc %d, gray %02x->%02x\n", __func__, poc, gray, *dst);
+}
+#endif
+
+#ifdef CONFIG_SUPPORT_GRAM_CHECKSUM
+static u8 s6e3ha6_gct_pattern[2][192 * 3];
+static u8 s6e3ha6_gct_pattern_line[2][192 * 3 * 5];
+int s6e3ha6_getidx_vddm_table(struct maptbl *tbl)
+{
+	struct panel_device *panel = (struct panel_device *)tbl->pdata;
+	struct panel_properties *props = &panel->panel_data.props;
+
+	pr_info("%s vddm %d\n", __func__, props->gct_vddm);
+
+	return tbl->ncol * props->gct_vddm;
+}
+
+static void generate_gct_pattern(u8 *dst, int pattern, int size)
+{
+	static u8 s6e3ha6_gct_value[2] = { 0x5A, 0xA5 };
+	static bool initialized = false;
+	int i;
+
+	if (size != 192 * 3 * 5 * 1480) {
+		pr_err("%s, invalid size %d\n", __func__, size);
+		return;
+	}
+
+	if (!initialized) {
+		/* generate gct pattern */
+		for (i = 0; i < 2; i++) {
+			memset(s6e3ha6_gct_pattern[i % 2], s6e3ha6_gct_value[i % 2], sizeof(u8) * 192 * 3);
+			pr_info("%s %02X pattern\n", __func__, s6e3ha6_gct_value[i % 2]);
+			print_data(s6e3ha6_gct_pattern[i % 2], 128);
+		}
+
+		/* generate gct pattern line */
+		for (i = 0; i < 960 / 192; i++) {
+			memcpy(&s6e3ha6_gct_pattern_line[i % 2][i * sizeof(s6e3ha6_gct_pattern[0])],
+					s6e3ha6_gct_pattern[i % 2], sizeof(s6e3ha6_gct_pattern[0]));
+			memcpy(&s6e3ha6_gct_pattern_line[(i + 1) % 2][i * sizeof(s6e3ha6_gct_pattern[0])],
+					s6e3ha6_gct_pattern[(i + 1) % 2], sizeof(s6e3ha6_gct_pattern[0]));
+		}
+		print_data(s6e3ha6_gct_pattern_line[i % 2], 128);
+		initialized = true;
+	}
+
+	/* generate gct pattern img */
+	for (i = 0; i < 1480; i++) {
+		if (pattern == GCT_PATTERN_1)
+			memcpy(&dst[i * sizeof(s6e3ha6_gct_pattern_line[i % 2])], 
+					s6e3ha6_gct_pattern_line[i % 2],
+					sizeof(s6e3ha6_gct_pattern_line[i % 2]));
+		else if (pattern == GCT_PATTERN_2)
+			memcpy(&dst[i * sizeof(s6e3ha6_gct_pattern_line[(i + 1) % 2])], 
+					s6e3ha6_gct_pattern_line[(i + 1) % 2],
+					sizeof(s6e3ha6_gct_pattern_line[(i + 1) % 2]));
+	}
+
+	pr_info("%s generate gct pattern(%d) %d done!!\n",
+			__func__, pattern, size);
+}
+
+void copy_gram_img_pattern_0(struct maptbl *tbl, u8 *dst)
+{
+	struct panel_device *panel;
+	struct panel_info *panel_data;
+	struct panel_properties *props;
+
+	if (!tbl || !dst)
+		return;
+
+	panel = (struct panel_device *)tbl->pdata;
+	if (unlikely(!panel))
+		return;
+
+	panel_data = &panel->panel_data;
+	props = &panel_data->props;
+
+	props->gct_valid_chksum = S6E3HA6_GRAM_CHECKSUM_VALID;
+
+	generate_gct_pattern(dst, props->gct_pattern == GCT_PATTERN_1 ?
+			GCT_PATTERN_1 : GCT_PATTERN_2, S6E3HA6_GRAM_IMG_SIZE);
+}
+
+void copy_gram_img_pattern_1(struct maptbl *tbl, u8 *dst)
+{
+	struct panel_device *panel;
+	struct panel_info *panel_data;
+	struct panel_properties *props;
+
+	if (!tbl || !dst)
+		return;
+
+	panel = (struct panel_device *)tbl->pdata;
+	if (unlikely(!panel))
+		return;
+
+	panel_data = &panel->panel_data;
+	props = &panel_data->props;
+
+	generate_gct_pattern(dst, props->gct_pattern == GCT_PATTERN_1 ?
+			GCT_PATTERN_2 : GCT_PATTERN_1, S6E3HA6_GRAM_IMG_SIZE);
 }
 #endif
 
@@ -1275,7 +1405,7 @@ unsigned int g_rddsm = 0xff;
 unsigned int get_panel_bigdata(void)
 {
 	unsigned int val = 0;
-	
+
 	val = (g_rddsm << 8) | g_rddpm;
 
 	return val;
@@ -1457,7 +1587,7 @@ void show_dsi_err(struct dumpinfo *info)
 	if (dsi_err)
 		panel_info("* DSI Error Count : %d\n", dsi_err);
 	panel_info("====================================================\n");
-	
+
 	inc_dpui_u32_field(DPUI_KEY_PNDSIE, dsi_err);
 }
 

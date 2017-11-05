@@ -701,7 +701,8 @@ static int zpci_restore(struct device *dev)
 		goto out;
 
 	zpci_map_resources(pdev);
-	zpci_register_ioat(zdev, 0, zdev->start_dma, zdev->end_dma,
+	zpci_register_ioat(zdev, 0, zdev->start_dma + PAGE_OFFSET,
+			   zdev->start_dma + zdev->iommu_size - 1,
 			   (u64) zdev->dma_table);
 
 out:

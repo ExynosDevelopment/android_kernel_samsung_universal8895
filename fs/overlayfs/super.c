@@ -376,8 +376,7 @@ static struct ovl_entry *ovl_alloc_entry(unsigned int numlower)
 static bool ovl_dentry_remote(struct dentry *dentry)
 {
 	return dentry->d_flags &
-		(DCACHE_OP_REVALIDATE | DCACHE_OP_WEAK_REVALIDATE |
-		 DCACHE_OP_REAL);
+		(DCACHE_OP_REVALIDATE | DCACHE_OP_WEAK_REVALIDATE);
 }
 
 static bool ovl_dentry_weird(struct dentry *dentry)
@@ -763,10 +762,6 @@ retry:
 		struct kstat stat = {
 			.mode = S_IFDIR | 0,
 		};
-		struct iattr attr = {
-			.ia_valid = ATTR_MODE,
-			.ia_mode = stat.mode,
-		};
 
 		if (work->d_inode) {
 			err = -EEXIST;
@@ -780,21 +775,6 @@ retry:
 		}
 
 		err = ovl_create_real(dir, work, &stat, NULL, NULL, true);
-		if (err)
-			goto out_dput;
-
-		err = vfs_removexattr(work, XATTR_NAME_POSIX_ACL_DEFAULT);
-		if (err && err != -ENODATA && err != -EOPNOTSUPP)
-			goto out_dput;
-
-		err = vfs_removexattr(work, XATTR_NAME_POSIX_ACL_ACCESS);
-		if (err && err != -ENODATA && err != -EOPNOTSUPP)
-			goto out_dput;
-
-		/* Clear any inherited mode bits */
-		inode_lock(work->d_inode);
-		err = notify_change(work, &attr, NULL);
-		inode_unlock(work->d_inode);
 		if (err)
 			goto out_dput;
 	}
@@ -1072,7 +1052,11 @@ static int ovl_fill_super(struct super_block *sb, void *data, int silent)
 		 * Make lower_mnt R/O.  That way fchmod/fchown on lower file
 		 * will fail instead of modifying lower fs.
 		 */
+#ifdef CONFIG_RKP_NS_PROT
+		rkp_set_mnt_flags(mnt,MNT_READONLY);
+#else
 		mnt->mnt_flags |= MNT_READONLY;
+#endif
 
 		ufs->lower_mnt[ufs->numlower] = mnt;
 		ufs->numlower++;

@@ -116,7 +116,7 @@ int fimc_is_itf_open_wrap(struct fimc_is_device_ischain *device, u32 module_id,
 	u32 instance = 0;
 	u32 hw_id = 0;
 	u32 group_id = -1;
-	u32 group_slot;
+	u32 group_slot, group_slot_c;
 	int ret = 0, ret_c = 0;
 	int hw_list[GROUP_HW_MAX];
 	int hw_index;
@@ -137,6 +137,9 @@ int fimc_is_itf_open_wrap(struct fimc_is_device_ischain *device, u32 module_id,
 			err("failed to create threads for DDK, ret %d", ret);
 			return ret;
 		}
+#if defined(DEBUG_REPROCESSING_NDONE)
+		atomic_set(&hardware->sfr_dump_debug_count, 0);
+#endif
 	}
 
 	region = device->is_region;
@@ -192,7 +195,9 @@ int fimc_is_itf_open_wrap(struct fimc_is_device_ischain *device, u32 module_id,
 	return ret;
 
 hardware_close:
-	for (; group_slot >= GROUP_SLOT_3AA; group_slot--) {
+	group_slot_c = group_slot;
+
+	for (group_slot = GROUP_SLOT_3AA; group_slot <= group_slot_c; group_slot++) {
 		group_id = path->group[group_slot];
 		hw_maxnum = fimc_is_get_hw_list(group_id, hw_list);
 		for (hw_index = 0; hw_index < hw_maxnum; hw_index++) {
@@ -516,6 +521,7 @@ bool check_setfile_change(struct fimc_is_group *group_leader,
 	struct fimc_is_hw_ip *hw_ip = NULL;
 	int hw_slot = -1;
 	u32 hw_id = DEV_HW_END;
+	enum exynos_sensor_position sensor_position;
 
 	if (group_leader->id != group->id)
 		return false;
@@ -540,12 +546,13 @@ bool check_setfile_change(struct fimc_is_group *group_leader,
 		return false;
 	}
 
+	sensor_position = hardware->sensor_position[instance];
 	if ((atomic_read(&hw_ip->instance) != instance)
-		||(scenario != hw_ip->setfile[instance].applied_scenario)) {
+		|| (scenario != hw_ip->setfile[sensor_position].applied_scenario)) {
 		info_hw("[%d][G:0x%x,0x%x,0x%x][ID:%d]%s: scenario(%d->%d), instance(%d->%d)\n",
 			instance, GROUP_ID(group_leader->id), GROUP_ID(group_ischain->id),
 			GROUP_ID(group->id), hw_ip->id, __func__,
-			hw_ip->setfile[instance].applied_scenario, scenario,
+			hw_ip->setfile[sensor_position].applied_scenario, scenario,
 			atomic_read(&hw_ip->instance), instance);
 		return true;
 	}

@@ -3208,6 +3208,7 @@ static int fimc_is_ischain_open(struct fimc_is_device_ischain *device)
 	device->margin_height	= 0;
 	device->sensor		= NULL;
 	device->module		= 0;
+	device->vid_to_vra	= 0;
 
 #ifdef ENABLE_IS_CORE
 	offset_region = (FW_MEM_SIZE - ((device->instance + 1) * PARAM_REGION_SIZE));
@@ -3967,6 +3968,21 @@ int fimc_is_ischain_3aa_close(struct fimc_is_device_ischain *device,
 		if (!test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
 			fimc_is_itf_sudden_stop_wrap(device, device->instance);
 		set_bit(FIMC_IS_GROUP_REQUEST_FSTOP, &group->state);
+		if (test_bit(FIMC_IS_HAL_DEBUG_SUDDEN_DEAD_DETECT, &sysfs_debug.hal_debug_mode)) {
+			msleep(sysfs_debug.hal_debug_delay);
+			panic("HAL sudden group close #1");
+		}
+	}
+
+	if (group->head && test_bit(FIMC_IS_GROUP_START, &group->head->state)) {
+		mgwarn("sudden group close", device, group);
+		if (!test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
+			fimc_is_itf_sudden_stop_wrap(device, device->instance);
+		set_bit(FIMC_IS_GROUP_REQUEST_FSTOP, &group->state);
+		if (test_bit(FIMC_IS_HAL_DEBUG_SUDDEN_DEAD_DETECT, &sysfs_debug.hal_debug_mode)) {
+			msleep(sysfs_debug.hal_debug_delay);
+			panic("HAL sudden group close #2");
+		}
 	}
 
 	ret = fimc_is_ischain_3aa_stop(device, queue);
@@ -4235,6 +4251,21 @@ int fimc_is_ischain_isp_close(struct fimc_is_device_ischain *device,
 		if (!test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
 			fimc_is_itf_sudden_stop_wrap(device, device->instance);
 		set_bit(FIMC_IS_GROUP_REQUEST_FSTOP, &group->state);
+		if (test_bit(FIMC_IS_HAL_DEBUG_SUDDEN_DEAD_DETECT, &sysfs_debug.hal_debug_mode)) {
+			msleep(sysfs_debug.hal_debug_delay);
+			panic("HAL sudden group close #1");
+		}
+	}
+
+	if (group->head && test_bit(FIMC_IS_GROUP_START, &group->head->state)) {
+		mgwarn("sudden group close", device, group);
+		if (!test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
+			fimc_is_itf_sudden_stop_wrap(device, device->instance);
+		set_bit(FIMC_IS_GROUP_REQUEST_FSTOP, &group->state);
+		if (test_bit(FIMC_IS_HAL_DEBUG_SUDDEN_DEAD_DETECT, &sysfs_debug.hal_debug_mode)) {
+			msleep(sysfs_debug.hal_debug_delay);
+			panic("HAL sudden group close #2");
+		}
 	}
 
 	ret = fimc_is_ischain_isp_stop(device, queue);
@@ -4507,6 +4538,21 @@ int fimc_is_ischain_dis_close(struct fimc_is_device_ischain *device,
 		if (!test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
 			fimc_is_itf_sudden_stop_wrap(device, device->instance);
 		set_bit(FIMC_IS_GROUP_REQUEST_FSTOP, &group->state);
+		if (test_bit(FIMC_IS_HAL_DEBUG_SUDDEN_DEAD_DETECT, &sysfs_debug.hal_debug_mode)) {
+			msleep(sysfs_debug.hal_debug_delay);
+			panic("HAL sudden group close #1");
+		}
+	}
+
+	if (group->head && test_bit(FIMC_IS_GROUP_START, &group->head->state)) {
+		mgwarn("sudden group close", device, group);
+		if (!test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
+			fimc_is_itf_sudden_stop_wrap(device, device->instance);
+		set_bit(FIMC_IS_GROUP_REQUEST_FSTOP, &group->state);
+		if (test_bit(FIMC_IS_HAL_DEBUG_SUDDEN_DEAD_DETECT, &sysfs_debug.hal_debug_mode)) {
+			msleep(sysfs_debug.hal_debug_delay);
+			panic("HAL sudden group close #2");
+		}
 	}
 
 	ret = fimc_is_ischain_dis_stop(device, queue);
@@ -4777,6 +4823,21 @@ int fimc_is_ischain_mcs_close(struct fimc_is_device_ischain *device,
 		if (!test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
 			fimc_is_itf_sudden_stop_wrap(device, device->instance);
 		set_bit(FIMC_IS_GROUP_REQUEST_FSTOP, &group->state);
+		if (test_bit(FIMC_IS_HAL_DEBUG_SUDDEN_DEAD_DETECT, &sysfs_debug.hal_debug_mode)) {
+			msleep(sysfs_debug.hal_debug_delay);
+			panic("HAL sudden group close #1");
+		}
+	}
+
+	if (group->head && test_bit(FIMC_IS_GROUP_START, &group->head->state)) {
+		mgwarn("sudden group close", device, group);
+		if (!test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
+			fimc_is_itf_sudden_stop_wrap(device, device->instance);
+		set_bit(FIMC_IS_GROUP_REQUEST_FSTOP, &group->state);
+		if (test_bit(FIMC_IS_HAL_DEBUG_SUDDEN_DEAD_DETECT, &sysfs_debug.hal_debug_mode)) {
+			msleep(sysfs_debug.hal_debug_delay);
+			panic("HAL sudden group close #2");
+		}
 	}
 
 	ret = fimc_is_ischain_mcs_stop(device, queue);
@@ -5041,6 +5102,21 @@ int fimc_is_ischain_vra_close(struct fimc_is_device_ischain *device,
 		if (!test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
 			fimc_is_itf_sudden_stop_wrap(device, device->instance);
 		set_bit(FIMC_IS_GROUP_REQUEST_FSTOP, &group->state);
+		if (test_bit(FIMC_IS_HAL_DEBUG_SUDDEN_DEAD_DETECT, &sysfs_debug.hal_debug_mode)) {
+			msleep(sysfs_debug.hal_debug_delay);
+			panic("HAL sudden group close #1");
+		}
+	}
+
+	if (group->head && test_bit(FIMC_IS_GROUP_START, &group->head->state)) {
+		mgwarn("sudden group close", device, group);
+		if (!test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
+			fimc_is_itf_sudden_stop_wrap(device, device->instance);
+		set_bit(FIMC_IS_GROUP_REQUEST_FSTOP, &group->state);
+		if (test_bit(FIMC_IS_HAL_DEBUG_SUDDEN_DEAD_DETECT, &sysfs_debug.hal_debug_mode)) {
+			msleep(sysfs_debug.hal_debug_delay);
+			panic("HAL sudden group close #2");
+		}
 	}
 
 	ret = fimc_is_ischain_vra_stop(device, queue);

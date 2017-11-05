@@ -3,7 +3,7 @@
  * ALSA SoC - Samsung Abox driver
  *
  * Copyright (c) 2016 Samsung Electronics Co. Ltd.
-  *
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
@@ -219,6 +219,7 @@ enum ABOX_SYSTEM_MSG {
 	ABOX_END_L2C_CONTROL,
 	ABOX_REQUEST_SYSCLK,
 	ABOX_REQUEST_L2C,
+	ABOX_CHANGED_GEAR,
 	ABOX_REPORT_LOG = 0x10,
 	ABOX_FLUSH_LOG,
 	ABOX_REPORT_DUMP = 0x20,

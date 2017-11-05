@@ -1754,8 +1754,8 @@ static int __remove_privs(struct dentry *dentry, int kill)
  */
 int file_remove_privs(struct file *file)
 {
-	struct dentry *dentry = file_dentry(file);
-	struct inode *inode = file_inode(file);
+	struct dentry *dentry = file->f_path.dentry;
+	struct inode *inode = d_inode(dentry);
 	int kill;
 	int error = 0;
 
@@ -1763,7 +1763,7 @@ int file_remove_privs(struct file *file)
 	if (IS_NOSEC(inode))
 		return 0;
 
-	kill = dentry_needs_remove_privs(dentry);
+	kill = file_needs_remove_privs(file);
 	if (kill < 0)
 		return kill;
 	if (kill)

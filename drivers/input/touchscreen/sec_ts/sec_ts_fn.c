@@ -1425,6 +1425,7 @@ static void get_checksum_data(void *device_data)
 	struct sec_ts_data *ts = container_of(sec, struct sec_ts_data, sec);
 	char buff[16] = { 0 };
 	char csum_result[4] = { 0 };
+	char data[5] = { 0 };
 	u8 cal_result;
 	u8 nv_result;
 	u8 temp;
@@ -1438,6 +1439,55 @@ static void get_checksum_data(void *device_data)
 		goto err;
 	}
 
+	disable_irq(ts->client->irq);
+
+	ts->plat_data->power(ts, false);
+	ts->power_status = SEC_TS_STATE_POWER_OFF;
+	sec_ts_delay(50);
+
+	ts->plat_data->power(ts, true);
+	ts->power_status = SEC_TS_STATE_POWER_ON;
+	sec_ts_delay(70);
+	
+	ret = sec_ts_wait_for_ready(ts, SEC_TS_ACK_BOOT_COMPLETE);
+	if (ret < 0) {
+		enable_irq(ts->client->irq);
+		input_err(true, &ts->client->dev, "%s: boot complete failed\n", __func__);
+		snprintf(buff, sizeof(buff), "%s", "NG");
+		goto err;
+	}
+
+	ret = ts->sec_ts_i2c_read(ts, SEC_TS_READ_FIRMWARE_INTEGRITY, &data[0], 1);
+	if (ret < 0 || (data[0] != 0x80)) {
+		enable_irq(ts->client->irq);
+		input_err(true, &ts->client->dev, "%s: firmware integrity failed, ret:%d, data:%X\n",
+				__func__, ret, data[0]);
+		snprintf(buff, sizeof(buff), "%s", "NG");
+		goto err;
+	}
+
+	ret = ts->sec_ts_i2c_read(ts, SEC_TS_READ_BOOT_STATUS, &data[1], 1);
+	if (ret < 0 || (data[1] != SEC_TS_STATUS_APP_MODE)) {
+		enable_irq(ts->client->irq);
+		input_err(true, &ts->client->dev, "%s: boot status failed, ret:%d, data:%X\n", __func__, ret, data[0]);
+		snprintf(buff, sizeof(buff), "%s", "NG");
+		goto err;
+	}
+
+	ret = ts->sec_ts_i2c_read(ts, SEC_TS_READ_TS_STATUS, &data[2], 4);
+	if (ret < 0 || (data[3] == TOUCH_SYSTEM_MODE_FLASH)) {
+		enable_irq(ts->client->irq);
+		input_err(true, &ts->client->dev, "%s: touch status failed, ret:%d, data:%X\n", __func__, ret, data[3]);
+		snprintf(buff, sizeof(buff), "%s", "NG");
+		goto err;
+	}
+
+	sec_ts_reinit(ts);
+
+	enable_irq(ts->client->irq);
+
+	input_err(true, &ts->client->dev, "%s: data[0]:%X, data[1]:%X, data[3]:%X\n", __func__, data[0], data[1], data[3]);
+	
 	temp = DO_FW_CHECKSUM | DO_PARA_CHECKSUM;
 	ret = ts->sec_ts_i2c_write(ts, SEC_TS_CMD_GET_CHECKSUM, &temp, 1);
 	if (ret < 0) {
@@ -2079,9 +2129,13 @@ static void get_tsp_test_result(void *device_data)
 
 	snprintf(buff, sizeof(buff), "M:%s, M:%d, A:%s, A:%d",
 			result->module_result == 0 ? "NONE" :
-			result->module_result == 1 ? "FAIL" : "PASS", result->module_count,
+			result->module_result == 1 ? "FAIL" :
+			result->module_result == 2 ? "PASS" : "A",
+			result->module_count,
 			result->assy_result == 0 ? "NONE" :
-			result->assy_result == 1 ? "FAIL" : "PASS", result->assy_count);
+			result->assy_result == 1 ? "FAIL" :
+			result->assy_result == 2 ? "PASS" : "A",
+			result->assy_count);
 
 	sec_cmd_set_cmd_result(sec, buff, strlen(buff));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -3869,7 +3923,7 @@ static void get_aod_rect(void *device_data)
 
 	if (ts->use_sponge) {
 		disable_irq(ts->client->irq);
-		ret = ts->sec_ts_read_sponge(ts, data);
+		ret = ts->sec_ts_read_sponge(ts, data, 8);
 		if (ret < 0) {
 			input_err(true, &ts->client->dev, "%s: Failed to read rect\n", __func__);
 			goto NG;

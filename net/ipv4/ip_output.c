@@ -102,9 +102,6 @@ int __ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 
 	iph->tot_len = htons(skb->len);
 	ip_send_check(iph);
-
-	skb->protocol = htons(ETH_P_IP);
-
 	return nf_hook(NFPROTO_IPV4, NF_INET_LOCAL_OUT,
 		       net, sk, skb, NULL, skb_dst(skb)->dev,
 		       dst_output);
@@ -1126,6 +1123,11 @@ static int ip_setup_cork(struct sock *sk, struct inet_cork *cork,
 	 */
 	opt = ipc->opt;
 	if (opt) {
+		/* check opt->opt.oplen size before memcpy
+		   It shouldn't over sizeof(struct ip_options) + 40 */
+		if (opt->opt.optlen > 40)
+			return -EFAULT;
+
 		if (!cork->opt) {
 			cork->opt = kmalloc(sizeof(struct ip_options) + 40,
 					    sk->sk_allocation);

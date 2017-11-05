@@ -304,6 +304,10 @@ static int ecryptfs_set_fmpinfo(struct file *file, struct inode *inode, unsigned
 		mapping->hash_tfm = crypt_stat->hash_tfm;
 		memset(mapping->key, 0, MAX_KEY_SIZE);
 		memcpy(mapping->key, crypt_stat->key, mapping->key_length);
+#ifdef CONFIG_CRYPTO_FIPS
+		mapping->cc_enable =
+			(mount_crypt_stat->flags & ECRYPTFS_ENABLE_CC)?1:0;
+#endif
 		mapping->private_enc_mode = FMP_FILE_ENC_MODE;
 	} else {
 		mapping->iv = NULL;
@@ -312,6 +316,9 @@ static int ecryptfs_set_fmpinfo(struct file *file, struct inode *inode, unsigned
 		mapping->sensitive_data_index = 0;
 		mapping->alg = NULL;
 		mapping->hash_tfm = NULL;
+#ifdef CONFIG_CRYPTO_FIPS
+		mapping->cc_enable = 0;
+#endif
 		mapping->plain_text = 0;
 		mapping->private_enc_mode = FMP_BYPASS_MODE;
 	}
@@ -426,6 +433,7 @@ static int ecryptfs_open(struct inode *inode, struct file *file)
 	}
 	ecryptfs_set_file_lower(
 		file, ecryptfs_inode_to_private(inode)->lower_file);
+
 	rc = read_or_initialize_metadata(ecryptfs_dentry);
 #ifdef CONFIG_SDP
 	if (rc) {

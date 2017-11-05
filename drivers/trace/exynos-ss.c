@@ -65,6 +65,10 @@
 #endif /* CONFIG_SEC_DEBUG */
 #endif /* CONFIG_SEC_EXT */
 
+#ifdef CONFIG_EXYNOS_SNAPSHOT_CRASH_KEY
+#include <linux/gpio_keys.h>
+#endif
+
 /*  Size domain */
 #define ESS_KEEP_HEADER_SZ		(SZ_256 * 3)
 #define ESS_HEADER_SZ			SZ_4K
@@ -503,11 +507,11 @@ struct exynos_ss_interface {
 #ifdef CONFIG_S3C2410_WATCHDOG
 extern int s3c2410wdt_set_emergency_stop(void);
 extern int s3c2410wdt_set_emergency_reset(unsigned int timeout);
-extern int s3c2410wdt_keepalive_emergency(void);
+extern int s3c2410wdt_keepalive_emergency(bool reset);
 #else
 #define s3c2410wdt_set_emergency_stop() 	(-1)
 #define s3c2410wdt_set_emergency_reset(a)	do { } while(0)
-#define s3c2410wdt_keepalive_emergency()	do { } while(0)
+#define s3c2410wdt_keepalive_emergency(a)	do { } while(0)
 #endif
 extern void *return_address(int);
 extern void (*arm_pm_restart)(char str, const char *cmd);
@@ -833,7 +837,7 @@ int exynos_ss_prepare_panic(void)
 	 * kick watchdog to prevent unexpected reset during panic sequence
 	 * and it prevents the hang during panic sequence by watchedog
 	 */
-	s3c2410wdt_keepalive_emergency();
+	s3c2410wdt_keepalive_emergency(true);
 
 	for_each_possible_cpu(cpu) {
 		mpidr = cpu_logical_map(cpu);
@@ -1425,7 +1429,7 @@ void exynos_ss_dump_one_task_info(struct task_struct *tsk, bool is_main)
 	 * and it prevents the hang during panic sequence by watchedog
 	 */
 	touch_softlockup_watchdog();
-	s3c2410wdt_keepalive_emergency();
+	s3c2410wdt_keepalive_emergency(false);
 
 	pr_info("%8d %8d %8d %16lld %c(%d) %3d  %16zx %16zx  %16zx %c %16s [%s]\n",
 			tsk->pid, (int)(tsk->utime), (int)(tsk->stime),
@@ -1651,16 +1655,15 @@ static int exynos_ss_sfr_dump_init(struct device_node *np)
 }
 #endif
 
-#ifdef CONFIG_SEC_UPLOAD
-extern void check_crash_keys_in_user(unsigned int code, int onoff);
-#endif
+#ifdef CONFIG_EXYNOS_SNAPSHOT_CRASH_KEY
 #ifdef CONFIG_TOUCHSCREEN_DUMP_MODE
 struct tsp_dump_callbacks dump_callbacks;
 #endif
-
-#ifdef CONFIG_EXYNOS_SNAPSHOT_CRASH_KEY
-void exynos_ss_check_crash_key(unsigned int code, int value)
+static int exynos_ss_check_crash_key(struct notifier_block *nb,
+				   unsigned long c, void *v)
 {
+	unsigned int code = c;
+	int value = *(int *)v;
 	static bool volup_p;
 	static bool voldown_p;
 	static int loopcount;
@@ -1670,12 +1673,8 @@ void exynos_ss_check_crash_key(unsigned int code, int value)
 	static const unsigned int VOLUME_DOWN = KEY_VOLUMEDOWN;
 
 #ifdef CONFIG_SEC_DEBUG
-	hard_reset_hook(code, value);
 	if ((sec_debug_get_debug_level() & 0x1) != 0x1) {
-#ifdef CONFIG_SEC_UPLOAD
-		check_crash_keys_in_user(code, value);
-#endif
-		return;
+		return NOTIFY_DONE;
 	}
 #endif
 
@@ -1730,7 +1729,11 @@ void exynos_ss_check_crash_key(unsigned int code, int value)
 			voldown_p = false;
 		}
 	}
+	return NOTIFY_OK;
 }
+static struct notifier_block nb_gpio_keys = {
+	.notifier_call = exynos_ss_check_crash_key
+};
 #endif
 
 
@@ -2556,6 +2559,9 @@ static int __init exynos_ss_init(void)
 		register_hook_logger(exynos_ss_hook_logger);
 #endif
 		register_reboot_notifier(&nb_reboot_block);
+#ifdef CONFIG_EXYNOS_SNAPSHOT_CRASH_KEY
+		register_gpio_keys_notifier(&nb_gpio_keys);
+#endif
 		atomic_notifier_chain_register(&panic_notifier_list, &nb_panic_block);
 	} else
 		pr_err("exynos-snapshot: %s failed\n", __func__);

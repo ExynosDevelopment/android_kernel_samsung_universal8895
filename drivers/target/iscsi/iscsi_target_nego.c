@@ -818,8 +818,7 @@ static int iscsi_target_handle_csg_zero(
 			SENDER_TARGET,
 			login->rsp_buf,
 			&login->rsp_length,
-			conn->param_list,
-			conn->tpg->tpg_attrib.login_keys_workaround);
+			conn->param_list);
 	if (ret < 0)
 		return -1;
 
@@ -889,8 +888,7 @@ static int iscsi_target_handle_csg_one(struct iscsi_conn *conn, struct iscsi_log
 			SENDER_TARGET,
 			login->rsp_buf,
 			&login->rsp_length,
-			conn->param_list,
-			conn->tpg->tpg_attrib.login_keys_workaround);
+			conn->param_list);
 	if (ret < 0) {
 		iscsit_tx_login_rsp(conn, ISCSI_STATUS_CLS_INITIATOR_ERR,
 				ISCSI_LOGIN_STATUS_INIT_ERR);

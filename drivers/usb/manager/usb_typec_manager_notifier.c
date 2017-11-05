@@ -842,7 +842,9 @@ int manager_notifier_register(struct notifier_block *nb, notifier_fn_t notifier,
 		alternate_mode_start_wait |= 0x1;
 		if(alternate_mode_start_wait == 0x11) {
 			pr_info("usb: [M] %s USB & DP driver is registered! Alternate mode Start!\n", __func__);
+#if defined(CONFIG_CCIC_ALTERNATE_MODE)
 			set_enable_alternate_mode(ALTERNATE_MODE_READY | ALTERNATE_MODE_START);
+#endif
 		}
 	} else if(listener == MANAGER_NOTIFY_CCIC_DP) {
 		m_noti.src = CCIC_NOTIFY_DEV_MANAGER;
@@ -867,7 +869,9 @@ int manager_notifier_register(struct notifier_block *nb, notifier_fn_t notifier,
 		alternate_mode_start_wait |= 0x10;
 		if(alternate_mode_start_wait == 0x11) {
 			pr_info("usb: [M] %s USB & DP driver is registered! Alternate mode Start!\n", __func__);
+#if defined(CONFIG_CCIC_ALTERNATE_MODE)
 			set_enable_alternate_mode(ALTERNATE_MODE_READY | ALTERNATE_MODE_START);
+#endif
 		}
 	}
 
@@ -1004,7 +1008,9 @@ static int manager_notifier_init(void)
 	INIT_DELAYED_WORK(&typec_manager.rtctime_update_work,
 		water_det_rtc_time_update);
 
+#if defined(CONFIG_CCIC_ALTERNATE_MODE)
 	set_enable_alternate_mode(ALTERNATE_MODE_NOT_READY);
+#endif
 #if defined(CONFIG_VBUS_NOTIFIER)
 	INIT_DELAYED_WORK(&typec_manager.vbus_noti_work,
 		muic_fake_event_work);

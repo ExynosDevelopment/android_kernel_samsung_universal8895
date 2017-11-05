@@ -3426,6 +3426,9 @@ static void fts_reset(struct fts_ts_info *info, unsigned int ms)
 		info->board->power(info, true);
 
 	fts_delay(5);
+
+	fts_set_warmboot_crc_enable(info);
+
 }
 
 static void fts_reset_work(struct work_struct *work)

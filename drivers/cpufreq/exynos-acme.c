@@ -907,7 +907,7 @@ static ssize_t store_cpufreq_min_limit(struct kobject *kobj,
 		scale++;
 
 		if (set_max) {
-			unsigned int qos = cal_dfs_get_max_freq(domain->cal_id);
+			unsigned int qos = domain->max_freq;
 
 			if (domain->user_default_qos)
 				qos = domain->user_default_qos;
@@ -946,7 +946,7 @@ static ssize_t store_cpufreq_min_limit(struct kobject *kobj,
 		else
 			control_hmp_boost(false);
 
-		freq = min(freq, (unsigned int)cal_dfs_get_max_freq(domain->cal_id));
+		freq = min(freq, domain->max_freq);
 		pm_qos_update_request(&domain->user_min_qos_req, freq);
 
 		set_max = true;
@@ -971,7 +971,7 @@ static ssize_t store_cpufreq_min_limit_wo_boost(struct kobject *kobj,
 		scale++;
 
 		if (set_max) {
-			unsigned int qos = cal_dfs_get_max_freq(domain->cal_id);
+			unsigned int qos = domain->max_freq;
 
 			if (domain->user_default_qos)
 				qos = domain->user_default_qos;
@@ -1009,7 +1009,7 @@ static ssize_t store_cpufreq_min_limit_wo_boost(struct kobject *kobj,
 			pr_info("HMP boost was already activated by cpufreq_min_limit node");
 #endif
 
-		freq = min(freq, (unsigned int)cal_dfs_get_max_freq(domain->cal_id));
+		freq = min(freq, domain->max_freq);
 		pm_qos_update_request(&domain->user_min_qos_wo_boost_req, freq);
 
 		set_max = true;
@@ -1595,12 +1595,12 @@ static __init int init_domain(struct exynos_cpufreq_domain *domain,
 
 	/*
 	 * If max-freq property exists in device tree, max frequency is
-	 * selected to the value defined in device tree.
-	 * In case of min-freq, min frequency is selected
+	 * selected to smaller one between the value defined in device
+	 * tree and CAL. In case of min-freq, min frequency is selected
 	 * to bigger one.
 	 */
 	if (!of_property_read_u32(dn, "max-freq", &val))
-		domain->max_freq = val;
+		domain->max_freq = min(domain->max_freq, val);
 	if (!of_property_read_u32(dn, "min-freq", &val))
 		domain->min_freq = max(domain->min_freq, val);
 
